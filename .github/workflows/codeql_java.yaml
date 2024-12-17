@@ -1,46 +1,23 @@
-name: CodeQL Analysis
+name: CodeQL Scan
 
 on:
   push:
-    branches: [main]
+    branches:
+      - 4.x
   pull_request:
-    branches: [main]
-  schedule:
-    - cron: '0 0 * * 0'  # Runs once a week
+    branches:
+      - 4.x
 
 jobs:
-  analyze:
-    name: Analyze
-    if: github.repository == 'Pdeeti/jenkins'
-    name: Analyze Java
+  codeql-scan:
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [java]
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Java
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'temurin'  # Also known as AdoptOpenJDK
-        java-version: '11'       # Specify the Java version your project uses
+      - name: Set up CodeQL
+        uses: github/codeql-action/init@v1
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: ${{ matrix.language }}
-
-    - name: Build and compile
-      #run: |
-      #  ./gradlew build -x test  # Update this command to match your build system
-      # Example for Maven:
-       run: |
-         mvn clean install -DskipTests
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      - name: Run CodeQL
+        uses: github/codeql-action/analyze@v1
