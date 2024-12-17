@@ -2,34 +2,32 @@ name: "CodeQL Java"
 
 on:
   push:
-    branches: [ "4.x" ]
+    branches: [ "master" ]
     paths:
       - '**/*.java' # Only trigger the workflow if Java files have changed
-      - 'kiba'
-  pull_request:
-    branches: [ "4.x" ]
-    paths:
-      - '**/*.java'
-strategy:
-  fail-fast: false
-  matrix:
-    # Override automatic language detection by changing the list below.
-    # Supported options are listed in a comment in the default workflow.
-    language: ['java']
+      - 'runzzit' # some file to trigger the workflow
+      - .github/workflows/codeql.yaml
 
 jobs:
   analyze:
-    if: github.repository == 'dsharma-1234/hawtio'
+    if: github.repository == 'Pdeeti/jenkins'
     name: Analyze Java
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
       security-events: write
+    strategy:
+      fail-fast: false
+      matrix: 
+        language: ['java'] 
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # provide tag here
+          ref: refs/tags/jenkins-1.513
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -40,3 +38,5 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:java"
+
+ 
