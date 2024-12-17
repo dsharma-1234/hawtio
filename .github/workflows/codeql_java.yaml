@@ -10,6 +10,12 @@ on:
     branches: [ "4.x" ]
     paths:
       - '**/*.java'
+strategy:
+  fail-fast: false
+  matrix:
+    # Override automatic language detection by changing the list below.
+    # Supported options are listed in a comment in the default workflow.
+    language: ['java']
 
 jobs:
   analyze:
@@ -29,10 +35,6 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: 'java'
-
-      - name: Build
-        run: |
-          mvn clean install
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
