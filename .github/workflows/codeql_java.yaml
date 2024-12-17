@@ -2,11 +2,12 @@ name: "CodeQL Java"
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "4.x" ]
     paths:
       - '**/*.java' # Only trigger the workflow if Java files have changed
+      - 'kiba'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "4.x" ]
     paths:
       - '**/*.java'
 
@@ -28,10 +29,6 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: 'java'
-
-      - name: Build
-        run: |
-          ./refine build
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
