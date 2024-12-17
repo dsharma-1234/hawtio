@@ -6,25 +6,23 @@
   <parent>
     <groupId>io.hawt</groupId>
     <artifactId>project</artifactId>
-    <version>4.3-SNAPSHOT</version>
-    <relativePath>../../pom.xml</relativePath>
+    <version>2.5.0</version>
+    <relativePath>../..</relativePath>
   </parent>
 
   <groupId>io.hawt.examples</groupId>
   <artifactId>hawtio-example-springboot-authentication</artifactId>
   <name>${project.artifactId}</name>
-  <description>Hawtio :: Sample Spring Boot 3.x process with authentication</description>
-  <packaging>jar</packaging>
+  <description>hawtio :: Sample Spring Boot 2.x process with authentication</description>
+  <packaging>war</packaging>
+
+  <properties>
+    <!-- Jetty version referred from the spring-boot-dependencies project -->
+    <jetty.version>9.4.11.v20180605</jetty.version>
+  </properties>
 
   <dependencyManagement>
     <dependencies>
-      <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-framework-bom</artifactId>
-        <version>${spring-version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
       <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-dependencies</artifactId>
@@ -58,27 +56,13 @@
       <artifactId>spring-boot-starter-undertow</artifactId>
     </dependency>
     <dependency>
-      <groupId>jakarta.annotation</groupId>
-      <artifactId>jakarta.annotation-api</artifactId>
-      <version>3.0.0</version>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-jaas</artifactId>
+      <version>${jetty.version}</version>
     </dependency>
     <dependency>
       <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-security</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>jetty-server</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-io</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-util</artifactId>
+      <artifactId>jetty-http</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -92,17 +76,6 @@
 
   <build>
     <plugins>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <source>17</source>
-          <testSource>17</testSource>
-          <target>17</target>
-          <testTarget>17</testTarget>
-          <release>17</release>
-          <testRelease>17</testRelease>
-        </configuration>
-      </plugin>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>

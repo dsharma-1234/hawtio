@@ -6,24 +6,18 @@
   <parent>
     <groupId>io.hawt</groupId>
     <artifactId>project</artifactId>
-    <version>4.3-SNAPSHOT</version>
-    <relativePath>../../pom.xml</relativePath>
+    <version>2.5.0</version>
+    <relativePath>../..</relativePath>
   </parent>
 
   <groupId>io.hawt.examples</groupId>
   <artifactId>hawtio-example-springboot</artifactId>
   <name>${project.artifactId}</name>
-  <description>Hawtio :: Sample Spring Boot 3.x process</description>
+  <description>hawtio :: Sample Spring Boot 2.x process</description>
+  <packaging>war</packaging>
 
   <dependencyManagement>
     <dependencies>
-      <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-framework-bom</artifactId>
-        <version>${spring-version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
       <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-dependencies</artifactId>
@@ -32,9 +26,9 @@
         <scope>import</scope>
       </dependency>
       <dependency>
-        <groupId>org.apache.camel.springboot</groupId>
+        <groupId>org.apache.camel</groupId>
         <artifactId>camel-spring-boot-dependencies</artifactId>
-        <version>${camel-spring-boot-version}</version>
+        <version>${camel-version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -75,71 +69,25 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
-    <!-- Hawtio -->
+    <!-- hawtio -->
     <dependency>
       <groupId>io.hawt</groupId>
       <artifactId>hawtio-springboot</artifactId>
     </dependency>
-    <!--
-      Include hawtio-log-logback if you want to use Logs plugin with Spring Boot.
-      Currently only Logback is supported.
-    -->
-    <dependency>
-      <groupId>io.hawt</groupId>
-      <artifactId>hawtio-log-logback</artifactId>
-    </dependency>
 
     <!-- Camel -->
     <dependency>
-      <groupId>org.apache.camel.springboot</groupId>
+      <groupId>org.apache.camel</groupId>
       <artifactId>camel-spring-boot-starter</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.camel.springboot</groupId>
+      <groupId>org.apache.camel</groupId>
       <artifactId>camel-stream-starter</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.camel.springboot</groupId>
-      <artifactId>camel-quartz-starter</artifactId>
-    </dependency>
-    <!--
-      This dependency is mandatory for enabling Camel management
-      via JMX / Hawtio.
-    -->
-    <dependency>
-      <groupId>org.apache.camel.springboot</groupId>
-      <artifactId>camel-management-starter</artifactId>
-    </dependency>
-    <!--
-      This dependency is required for viewing Camel routes source XML.
-    -->
-    <dependency>
-      <groupId>org.apache.camel.springboot</groupId>
-      <artifactId>camel-spring-boot-xml-starter</artifactId>
-    </dependency>
-    <!--
-      To enable Camel plugin debugging feature, add this dependency.
-    -->
-    <dependency>
-      <groupId>org.apache.camel.springboot</groupId>
-      <artifactId>camel-debug-starter</artifactId>
     </dependency>
   </dependencies>
 
   <build>
     <plugins>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <source>17</source>
-          <testSource>17</testSource>
-          <target>17</target>
-          <testTarget>17</testTarget>
-          <release>17</release>
-          <testRelease>17</testRelease>
-        </configuration>
-      </plugin>
-
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
@@ -159,11 +107,28 @@
         </executions>
       </plugin>
 
-      <!-- Downloads the Prometheus JMX exporter Java agent -->
+      <plugin>
+        <artifactId>maven-war-plugin</artifactId>
+        <configuration>
+          <failOnMissingWebXml>false</failOnMissingWebXml>
+        </configuration>
+      </plugin>
+
+      <!-- to run with mvn hawtio:spring-boot -->
+      <plugin>
+        <groupId>io.hawt</groupId>
+        <artifactId>hawtio-maven-plugin</artifactId>
+        <version>${project.version}</version>
+        <configuration>
+          <mainClass>io.hawt.example.spring.boot.SampleSpringBootService</mainClass>
+        </configuration>
+      </plugin>
+
+      <!-- downloads the Prometheus JMX exporter java agent -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.8.1</version>
+        <version>3.1.1</version>
         <executions>
           <execution>
             <id>copy</id>
@@ -185,6 +150,7 @@
           </artifactItems>
         </configuration>
       </plugin>
+
     </plugins>
   </build>
 

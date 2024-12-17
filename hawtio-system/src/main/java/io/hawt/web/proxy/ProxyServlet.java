@@ -12,15 +12,16 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.BitSet;
 import java.util.Enumeration;
-
-import jakarta.servlet.ServletConfig;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.util.Formatter;
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import io.hawt.system.ConfigManager;
-import io.hawt.system.ProxyAllowlist;
+import io.hawt.system.ProxyWhitelist;
 import io.hawt.util.Strings;
 import io.hawt.web.ForbiddenReason;
 import io.hawt.web.ServletHelpers;
@@ -32,12 +33,14 @@ import org.apache.http.HttpHeaders;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.CookieStore;
 import org.apache.http.client.methods.AbortableHttpRequest;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.utils.URIUtils;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLContextBuilder;
 import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
@@ -45,7 +48,6 @@ import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicHttpEntityEnclosingRequest;
 import org.apache.http.message.BasicHttpRequest;
 import org.apache.http.message.HeaderGroup;
-import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,9 +74,17 @@ public class ProxyServlet extends HttpServlet {
 
     private static final long serialVersionUID = 7792226114533360114L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(ProxyServlet.class);
+    private static final transient Logger LOG = LoggerFactory.getLogger(ProxyServlet.class);
 
     /* INIT PARAMETER NAME CONSTANTS */
+
+    /**
+     * A boolean parameter name to enable logging of input and target URLs to the servlet log.
+     *
+     * @deprecated Use SLF4J {@link Logger}
+     */
+    @Deprecated
+    public static final String P_LOG = "log";
 
     /**
      * A boolean parameter name to enable forwarding of the client IP
@@ -87,24 +97,22 @@ public class ProxyServlet extends HttpServlet {
     private static final String PROXY_ACCEPT_SELF_SIGNED_CERTS = "hawtio.proxyDisableCertificateValidation";
     private static final String PROXY_ACCEPT_SELF_SIGNED_CERTS_ENV = "PROXY_DISABLE_CERT_VALIDATION";
 
-    public static final String PROXY_ALLOWLIST = "proxyAllowlist";
+    public static final String PROXY_WHITELIST = "proxyWhitelist";
     public static final String LOCAL_ADDRESS_PROBING = "localAddressProbing";
-    public static final String DISABLE_PROXY = "disableProxy";
 
-    public static final String HAWTIO_PROXY_ALLOWLIST = "hawtio." + PROXY_ALLOWLIST;
+    public static final String HAWTIO_PROXY_WHITELIST = "hawtio." + PROXY_WHITELIST;
     public static final String HAWTIO_LOCAL_ADDRESS_PROBING = "hawtio." + LOCAL_ADDRESS_PROBING;
-    public static final String HAWTIO_DISABLE_PROXY = "hawtio." + DISABLE_PROXY;
 
     /* MISC */
 
-    protected boolean enabled = true;
-
+    protected boolean doLog = false;
     protected boolean doForwardIP = true;
     protected boolean acceptSelfSignedCerts = false;
 
-    protected ProxyAllowlist allowlist;
+    protected ProxyWhitelist whitelist;
 
     protected CloseableHttpClient proxyClient;
+    private CookieStore cookieStore;
 
     @Override
     public String getServletInfo() {
@@ -117,24 +125,23 @@ public class ProxyServlet extends HttpServlet {
 
         ConfigManager config = (ConfigManager) getServletContext().getAttribute(ConfigManager.CONFIG_MANAGER);
 
-        enabled = !config.getBoolean(DISABLE_PROXY, false);
-        if (!enabled) {
-            LOG.info("Proxy servlet is disabled");
-            // proxy servlet is disabled so won't run any further initialisation
-            return;
-        }
-
-        String allowlistStr = config.get(PROXY_ALLOWLIST).orElse(servletConfig.getInitParameter(PROXY_ALLOWLIST));
+        String whitelistStr = config.get(PROXY_WHITELIST, servletConfig.getInitParameter(PROXY_WHITELIST));
         boolean probeLocal = config.getBoolean(LOCAL_ADDRESS_PROBING, true);
-        allowlist = new ProxyAllowlist(allowlistStr, probeLocal);
+        whitelist = new ProxyWhitelist(whitelistStr, probeLocal);
 
         String doForwardIPString = servletConfig.getInitParameter(P_FORWARDEDFOR);
         if (doForwardIPString != null) {
             this.doForwardIP = Boolean.parseBoolean(doForwardIPString);
         }
 
+        String doLogStr = servletConfig.getInitParameter(P_LOG);
+        if (doLogStr != null) {
+            this.doLog = Boolean.parseBoolean(doLogStr);
+        }
+
+        cookieStore = new BasicCookieStore();
         HttpClientBuilder httpClientBuilder = HttpClients.custom()
-            .disableCookieManagement()
+            .setDefaultCookieStore(cookieStore)
             .useSystemProperties();
 
         if (System.getProperty(PROXY_ACCEPT_SELF_SIGNED_CERTS) != null) {
@@ -148,9 +155,13 @@ public class ProxyServlet extends HttpServlet {
                 SSLContextBuilder builder = new SSLContextBuilder();
                 builder.loadTrustMaterial(null, (X509Certificate[] x509Certificates, String s) -> true);
                 SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(
-                    builder.build(), NoopHostnameVerifier.INSTANCE);
+                    builder.build(), SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
                 httpClientBuilder.setSSLSocketFactory(sslsf);
-            } catch (NoSuchAlgorithmException | KeyStoreException | KeyManagementException e) {
+            } catch (NoSuchAlgorithmException e) {
+                throw new ServletException(e);
+            } catch (KeyStoreException e) {
+                throw new ServletException(e);
+            } catch (KeyManagementException e) {
                 throw new ServletException(e);
             }
         }
@@ -161,9 +172,7 @@ public class ProxyServlet extends HttpServlet {
     @Override
     public void destroy() {
         try {
-            if (proxyClient != null) {
-                proxyClient.close();
-            }
+            proxyClient.close();
         } catch (IOException e) {
             log("While destroying servlet, shutting down httpclient: " + e, e);
             LOG.error("While destroying servlet, shutting down httpclient: " + e, e);
@@ -173,29 +182,18 @@ public class ProxyServlet extends HttpServlet {
 
     @Override
     protected void service(HttpServletRequest servletRequest, HttpServletResponse servletResponse)
-        throws IOException {
-        // returns if enabled or not so that Connect plugin can turn on/off itself
-        if ("/enabled".equals(servletRequest.getPathInfo())) {
-            ServletHelpers.sendJSONResponse(servletResponse, enabled);
-            return;
-        }
-
-        if (!enabled) {
-            servletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            return;
-        }
-
+        throws ServletException, IOException {
         // Make the Request
-        //note: we won't transfer the protocol version because I'm not sure if it would truly be compatible
+        //note: we won't transfer the protocol version because I'm not sure it would truly be compatible
         ProxyAddress proxyAddress = parseProxyAddress(servletRequest);
         if (proxyAddress == null || proxyAddress.getFullProxyUrl() == null) {
             servletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
-        // TODO Implement allowlist protection for Kubernetes services as well
+        // TODO Implement whitelist protection for Kubernetes services as well
         if (proxyAddress instanceof ProxyDetails) {
             ProxyDetails details = (ProxyDetails) proxyAddress;
-            if (!allowlist.isAllowed(details)) {
+            if (!whitelist.isAllowed(details)) {
                 LOG.debug("Rejecting {}", proxyAddress);
                 ServletHelpers.doForbidden(servletResponse, ForbiddenReason.HOST_NOT_ALLOWED);
                 return;
@@ -237,6 +235,20 @@ public class ProxyServlet extends HttpServlet {
             proxyRequest.setHeader("Authorization", "Basic " + encodedCreds);
         }
 
+        Header proxyAuthHeader = proxyRequest.getFirstHeader("Authorization");
+        if (proxyAuthHeader != null) {
+            String proxyAuth = proxyAuthHeader.getValue();
+            // if remote jolokia credentials have changed, we have to clear session cookies in http-client
+            HttpSession session = servletRequest.getSession();
+            if (session != null) {
+                String previousProxyCredentials = (String) session.getAttribute("proxy-credentials");
+                if (previousProxyCredentials != null && !previousProxyCredentials.equals(proxyAuth)) {
+                    cookieStore.clear();
+                }
+                session.setAttribute("proxy-credentials", proxyAuth);
+            }
+        }
+
         setXForwardedForHeader(servletRequest, proxyRequest);
 
         CloseableHttpResponse proxyResponse = null;
@@ -244,6 +256,9 @@ public class ProxyServlet extends HttpServlet {
         try {
 
             // Execute the request
+            if (doLog) {
+                log("proxy " + method + " uri: " + servletRequest.getRequestURI() + " -- " + proxyRequest.getRequestLine().getUri());
+            }
             LOG.debug("proxy {} uri: {} -- {}", method, servletRequest.getRequestURI(), proxyRequest.getRequestLine().getUri());
             proxyResponse = proxyClient.execute(URIUtils.extractHost(targetUriObj), proxyRequest);
 
@@ -251,6 +266,9 @@ public class ProxyServlet extends HttpServlet {
             statusCode = proxyResponse.getStatusLine().getStatusCode();
 
             if (statusCode == 401 || statusCode == 403) {
+                if (doLog) {
+                    log("Authentication Failed on remote server " + proxyRequestUri);
+                }
                 LOG.debug("Authentication Failed on remote server {}", proxyRequestUri);
             } else if (doResponseRedirectOrNotModifiedLogic(servletRequest, servletResponse, proxyResponse, statusCode, targetUriObj)) {
                 //the response is already "committed" now without any body to send
@@ -258,20 +276,19 @@ public class ProxyServlet extends HttpServlet {
                 return;
             }
 
-            // Pass the response code. This method with the "reason phrase" is deprecated, but it's the only way to pass the
+            // Pass the response code. This method with the "reason phrase" is deprecated but it's the only way to pass the
             //  reason along too.
-            servletResponse.setStatus(statusCode);
+            //noinspection deprecation
+            servletResponse.setStatus(statusCode, proxyResponse.getStatusLine().getReasonPhrase());
+
             copyResponseHeaders(proxyResponse, servletResponse);
 
             // Send the content to the client
             copyResponseEntity(proxyResponse, servletResponse);
 
         } catch (Exception e) {
-            // abort request, according to best practice with HttpClient
-            @SuppressWarnings("deprecation")
-            boolean isAbortable = proxyRequest instanceof AbortableHttpRequest;
-            if (isAbortable) {
-                @SuppressWarnings("deprecation")
+            //abort request, according to best practice with HttpClient
+            if (proxyRequest instanceof AbortableHttpRequest) {
                 AbortableHttpRequest abortableHttpRequest = (AbortableHttpRequest) proxyRequest;
                 abortableHttpRequest.abort();
             }
@@ -323,8 +340,9 @@ public class ProxyServlet extends HttpServlet {
                 throw new ServletException("Received status code: " + statusCode
                     + " but no " + HttpHeaders.LOCATION + " header was found in the response");
             }
-
+            // Modify the redirect to go to this proxy servlet rather that the proxied host
             String locStr = rewriteUrlFromResponse(servletRequest, locationHeader.getValue(), targetUriObj.toString());
+
             servletResponse.sendRedirect(locStr);
             return true;
         }
@@ -344,9 +362,9 @@ public class ProxyServlet extends HttpServlet {
 
     /**
      * These are the "hop-by-hop" headers that should not be copied.
-     * <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html">rfc2616, section 13</a>
+     * http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
      * I use an HttpClient HeaderGroup class instead of Set<String> because this
-     * approach does case-insensitive lookup faster.
+     * approach does case insensitive lookup faster.
      */
     protected static final HeaderGroup hopByHopHeaders;
 
@@ -364,19 +382,19 @@ public class ProxyServlet extends HttpServlet {
      * Copy request headers from the servlet client to the proxy request.
      */
     protected void copyRequestHeaders(HttpServletRequest servletRequest, HttpRequest proxyRequest, URI targetUriObj) {
-        // Get an Enumeration of all the header names sent by the client
-        Enumeration<String> enumerationOfHeaderNames = servletRequest.getHeaderNames();
+        // Get an Enumeration of all of the header names sent by the client
+        Enumeration enumerationOfHeaderNames = servletRequest.getHeaderNames();
         while (enumerationOfHeaderNames.hasMoreElements()) {
-            String headerName = enumerationOfHeaderNames.nextElement();
+            String headerName = (String) enumerationOfHeaderNames.nextElement();
             //Instead the content-length is effectively set via InputStreamEntity
             if (headerName.equalsIgnoreCase(HttpHeaders.CONTENT_LENGTH))
                 continue;
             if (hopByHopHeaders.containsHeader(headerName))
                 continue;
 
-            Enumeration<String> headers = servletRequest.getHeaders(headerName);
+            Enumeration headers = servletRequest.getHeaders(headerName);
             while (headers.hasMoreElements()) {//sometimes more than one value
-                String headerValue = headers.nextElement();
+                String headerValue = (String) headers.nextElement();
                 // In case the proxy host is running multiple virtual servers,
                 // rewrite the Host header to ensure that we get content from
                 // the correct virtual server
@@ -389,7 +407,7 @@ public class ProxyServlet extends HttpServlet {
                         }
                     }
                 }
-                proxyRequest.addHeader(headerName, ServletHelpers.sanitizeHeader(headerValue));
+                proxyRequest.addHeader(headerName, headerValue);
             }
         }
     }
@@ -403,7 +421,7 @@ public class ProxyServlet extends HttpServlet {
             if (existingHeader != null) {
                 newHeader = existingHeader + ", " + newHeader;
             }
-            proxyRequest.setHeader(headerName, ServletHelpers.sanitizeHeader(newHeader));
+            proxyRequest.setHeader(headerName, newHeader);
         }
     }
 
@@ -414,24 +432,7 @@ public class ProxyServlet extends HttpServlet {
         for (Header header : proxyResponse.getAllHeaders()) {
             if (hopByHopHeaders.containsHeader(header.getName()))
                 continue;
-            if (header.getName().equalsIgnoreCase(HttpHeaders.WWW_AUTHENTICATE)) {
-                // for browser purposes we want to avoid using browser native popup for entering credentials
-                // and storing them in browser's password manager. The best way to do it is to ensure that
-                // 'WWW-Authenticate: Basic realm="xx"' is never sent. "Basic" is the trigger for native dialog,
-                // so we'll replace:
-                //     WWW-Authenticate: Basic realm="xx"
-                // with:
-                //     WWW-Authenticate: Hawtio original-scheme="Basic" realm="xx"
-                // and won't touch any other schemes
-                String value = header.getValue();
-                if (value.toLowerCase().startsWith("basic ")) {
-                    value = "Hawtio original-scheme=\"Basic\" " + value.substring(6);
-                }
-                servletResponse.addHeader(header.getName(), value);
-            } else {
-                // just copy
-                servletResponse.addHeader(header.getName(), header.getValue());
-            }
+            servletResponse.addHeader(header.getName(), header.getValue());
         }
     }
 
@@ -452,17 +453,57 @@ public class ProxyServlet extends HttpServlet {
      */
     protected String rewriteUrlFromResponse(HttpServletRequest servletRequest, String theUrl, String targetUri) {
         //TODO document example paths
-
         if (theUrl.startsWith(targetUri)) {
-            String curUrl = String.format("%s://%s:%s%s%s", servletRequest.getScheme(),
-                servletRequest.getServerName(),
-                servletRequest.getServerPort(),
-                servletRequest.getContextPath(),
-                servletRequest.getServletPath());
-
-            theUrl = curUrl + theUrl.substring(targetUri.length() - 1);
+            String curUrl = servletRequest.getRequestURL().toString();//no query
+            String pathInfo = servletRequest.getPathInfo();
+            if (pathInfo != null) {
+                assert curUrl.endsWith(pathInfo);
+                curUrl = curUrl.substring(0, curUrl.length() - pathInfo.length());//take pathInfo off
+            }
+            theUrl = curUrl + theUrl.substring(targetUri.length());
         }
         return theUrl;
+    }
+
+    /**
+     * Encodes characters in the query or fragment part of the URI.
+     * <p/>
+     * <p>Unfortunately, an incoming URI sometimes has characters disallowed by the spec.  HttpClient
+     * insists that the outgoing proxied request has a valid URI because it uses Java's {@link URI}.
+     * To be more forgiving, we must escape the problematic characters.  See the URI class for the
+     * spec.
+     *
+     * @param in example: name=value&foo=bar#fragment
+     */
+    protected static CharSequence encodeUriQuery(CharSequence in) {
+        //Note that I can't simply use URI.java to encode because it will escape pre-existing escaped things.
+        StringBuilder outBuf = null;
+        Formatter formatter = null;
+        for (int i = 0; i < in.length(); i++) {
+            char c = in.charAt(i);
+            boolean escape = true;
+            if (c < 128) {
+                if (asciiQueryChars.get((int) c)) {
+                    escape = false;
+                }
+            } else if (!Character.isISOControl(c) && !Character.isSpaceChar(c)) {//not-ascii
+                escape = false;
+            }
+            if (!escape) {
+                if (outBuf != null)
+                    outBuf.append(c);
+            } else {
+                //escape
+                if (outBuf == null) {
+                    outBuf = new StringBuilder(in.length() + 5 * 3);
+                    outBuf.append(in, 0, i);
+                    formatter = new Formatter(outBuf);
+                }
+                //leading %, 0 padded, width 2, capital hex
+                formatter.format("%%%02X", (int) c);//TODO
+            }
+        }
+        return outBuf != null ? outBuf : in;
     }
 
     protected static final BitSet asciiQueryChars;
@@ -473,14 +514,14 @@ public class ProxyServlet extends HttpServlet {
         char[] c_reserved = "?/[]@".toCharArray();//plus punct
 
         asciiQueryChars = new BitSet(128);
-        for (char c = 'a'; c <= 'z'; c++) asciiQueryChars.set(c);
-        for (char c = 'A'; c <= 'Z'; c++) asciiQueryChars.set(c);
-        for (char c = '0'; c <= '9'; c++) asciiQueryChars.set(c);
-        for (char c : c_unreserved) asciiQueryChars.set(c);
-        for (char c : c_punct) asciiQueryChars.set(c);
-        for (char c : c_reserved) asciiQueryChars.set(c);
+        for (char c = 'a'; c <= 'z'; c++) asciiQueryChars.set((int) c);
+        for (char c = 'A'; c <= 'Z'; c++) asciiQueryChars.set((int) c);
+        for (char c = '0'; c <= '9'; c++) asciiQueryChars.set((int) c);
+        for (char c : c_unreserved) asciiQueryChars.set((int) c);
+        for (char c : c_punct) asciiQueryChars.set((int) c);
+        for (char c : c_reserved) asciiQueryChars.set((int) c);
 
-        asciiQueryChars.set('%');//leave existing percent escapes in place
+        asciiQueryChars.set((int) '%');//leave existing percent escapes in place
     }
 
 }

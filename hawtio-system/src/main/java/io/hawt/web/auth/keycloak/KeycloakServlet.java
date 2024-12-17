@@ -4,16 +4,16 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
+import java.io.PrintWriter;
+import java.net.URL;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import io.hawt.system.ConfigManager;
 import io.hawt.util.IOHelper;
-import io.hawt.util.Strings;
-import io.hawt.web.ServletHelpers;
 import io.hawt.web.auth.AuthenticationConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,52 +22,50 @@ import org.slf4j.LoggerFactory;
  * Servlet, which aims to return:
  * - whether keycloak is enabled (true/false) if path '/enabled' is used
  * - keycloak.json to be used by keycloak JS adapter on frontend if path '/client-config' is used
- * - validate if current JAAS logged subject is same like SSO user logged through keycloak
- * if path '/validate-subject-matches' is used
+ * - validate if current JAAS logged subject is same like SSO user logged through keycloak if path '/validate-subject-matches' is used
  */
 public class KeycloakServlet extends HttpServlet {
 
     private static final long serialVersionUID = 3464713772839013741L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(KeycloakServlet.class);
+    private static final transient Logger LOG = LoggerFactory.getLogger(KeycloakServlet.class);
 
-    /**
-     * Keycloak config file used for frontend. Will use default location if not provided.
-     */
     public static final String KEYCLOAK_CLIENT_CONFIG = "keycloakClientConfig";
 
     public static final String HAWTIO_KEYCLOAK_CLIENT_CONFIG = "hawtio." + KEYCLOAK_CLIENT_CONFIG;
 
     private String keycloakConfig = null;
+    private AuthenticationConfiguration authConfiguration;
     private boolean keycloakEnabled;
 
     @Override
-    public void init() {
+    public void init() throws ServletException {
         ConfigManager config = (ConfigManager) getServletContext().getAttribute(ConfigManager.CONFIG_MANAGER);
 
-        AuthenticationConfiguration authConfig = AuthenticationConfiguration.getConfiguration(getServletContext());
-        keycloakEnabled = authConfig.isKeycloakEnabled();
+        authConfiguration = AuthenticationConfiguration.getConfiguration(getServletContext());
+        keycloakEnabled = authConfiguration.isKeycloakEnabled();
         LOG.info("Keycloak integration is {}", this.keycloakEnabled ? "enabled" : "disabled");
         if (!keycloakEnabled) {
             return;
         }
 
-        String keycloakConfigFile = config.get(KEYCLOAK_CLIENT_CONFIG).orElse(null);
+        String keycloakConfigFile = config.get(KEYCLOAK_CLIENT_CONFIG, null);
 
         // JVM system properties can override always
         if (System.getProperty(HAWTIO_KEYCLOAK_CLIENT_CONFIG) != null) {
             keycloakConfigFile = System.getProperty(HAWTIO_KEYCLOAK_CLIENT_CONFIG);
         }
 
-        if (Strings.isBlank(keycloakConfigFile)) {
+        if (keycloakConfigFile == null || keycloakConfigFile.length() == 0) {
             keycloakConfigFile = defaultKeycloakConfigLocation();
         }
 
-        LOG.info("Looking for Keycloak configuration file in: {}", keycloakConfigFile);
+        LOG.info("Will load keycloak config from location: {}", keycloakConfigFile);
 
-        InputStream is = ServletHelpers.loadFile(keycloakConfigFile);
-        if (is != null) {
-            LOG.info("Reading Keycloak client configuration.");
+        InputStream is = loadFile(keycloakConfigFile);
+        if (is == null) {
+            LOG.warn("Keycloak client configuration not found!");
+        } else {
             try {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(is));
                 String keycloakConfig = IOHelper.readFully(reader);
@@ -83,8 +81,7 @@ public class KeycloakServlet extends HttpServlet {
     }
 
     /**
-     * Will try to guess the config location based on the server where hawtio is running.
-     * Used just if keycloakClientConfig is not provided
+     * Will try to guess the config location based on the server where hawtio is running. Used just if keycloakClientConfig is not provided
      *
      * @return config to be used by default
      */
@@ -113,28 +110,47 @@ public class KeycloakServlet extends HttpServlet {
         return "classpath:keycloak.json";
     }
 
+    protected InputStream loadFile(String keycloakConfigFile) {
+        if (keycloakConfigFile.startsWith("classpath:")) {
+            String classPathLocation = keycloakConfigFile.substring(10);
+            return getClass().getClassLoader().getResourceAsStream(classPathLocation);
+        } else {
+            try {
+                if (!keycloakConfigFile.contains(":")) {
+                    //assume file protocol
+                    keycloakConfigFile = "file://" + keycloakConfigFile;
+                }
+                return new URL(keycloakConfigFile).openStream();
+            } catch (Exception e) {
+                LOG.warn("Couldn't find keycloak config file on location: " + keycloakConfigFile);
+                LOG.debug("Couldn't find keycloak config file", e);
+                return null;
+            }
+        }
+    }
+
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         String pathInfo = request.getPathInfo();
         switch (pathInfo) {
-        case "/enabled":
-            ServletHelpers.sendJSONResponse(response, keycloakEnabled);
-            break;
-        case "/client-config":
-            if (keycloakConfig == null) {
-                response.sendError(404, "Keycloak client configuration not found");
-            } else {
-                ServletHelpers.sendJSONResponse(response, keycloakConfig);
-            }
-            break;
-        case "/validate-subject-matches":
-            String keycloakUser = request.getParameter("keycloakUser");
-            if (Strings.isBlank(keycloakUser)) {
-                LOG.warn("Parameter 'keycloakUser' not found");
-            }
-            boolean valid = validateKeycloakUser(request, keycloakUser);
-            ServletHelpers.sendJSONResponse(response, valid);
-            break;
+            case "/enabled":
+                renderJSONResponse(response, String.valueOf(keycloakEnabled));
+                break;
+            case "/client-config":
+                if (keycloakConfig == null) {
+                    response.sendError(404, "Keycloak client configuration not found");
+                } else {
+                    renderJSONResponse(response, keycloakConfig);
+                }
+                break;
+            case "/validate-subject-matches":
+                String keycloakUser = request.getParameter("keycloakUser");
+                if (keycloakUser == null || keycloakUser.length() == 0) {
+                    LOG.warn("Parameter 'keycloakUser' not found");
+                }
+                boolean valid = validateKeycloakUser(request, keycloakUser);
+                renderJSONResponse(response, String.valueOf(valid));
+                break;
         }
     }
 
@@ -154,5 +170,13 @@ public class KeycloakServlet extends HttpServlet {
         } else {
             return true;
         }
+    }
+
+    private void renderJSONResponse(HttpServletResponse response, String text) throws ServletException, IOException {
+        response.setContentType("application/json");
+        PrintWriter writer = response.getWriter();
+        writer.println(text);
+        writer.flush();
+        writer.close();
     }
 }

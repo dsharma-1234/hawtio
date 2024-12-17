@@ -2,22 +2,22 @@ package io.hawt.web;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintWriter;
-import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import javax.management.AttributeNotFoundException;
-
-import io.hawt.web.auth.SessionExpiryFilter;
-import jakarta.servlet.ServletContext;
-import jakarta.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpServletResponse;
 
 import io.hawt.system.Authenticator;
 import io.hawt.util.IOHelper;
-import org.jolokia.json.parser.JSONParser;
-import org.jolokia.json.parser.ParseException;
-import org.jolokia.server.core.service.serializer.SerializeOptions;
-import org.jolokia.service.serializer.JolokiaSerializer;
-import org.jolokia.json.JSONObject;
+import org.jolokia.converter.Converters;
+import org.jolokia.converter.json.JsonConvertOptions;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,13 +26,9 @@ import org.slf4j.LoggerFactory;
  */
 public class ServletHelpers {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ServletHelpers.class);
+    private static final transient Logger LOG = LoggerFactory.getLogger(ServletHelpers.class);
 
-    protected static final String HEADER_HAWTIO_FORBIDDEN_REASON = "Hawtio-Forbidden-Reason";
     private static final String HEADER_WWW_AUTHENTICATE = "WWW-Authenticate";
-    private static final String HEADER_RETRY_AFTER = "Retry-After";
-
-    private static final JolokiaSerializer SERIALIZER = new JolokiaSerializer();
 
     public static void doForbidden(HttpServletResponse response) {
         doForbidden(response, ForbiddenReason.NONE);
@@ -40,59 +36,32 @@ public class ServletHelpers {
 
     public static void doForbidden(HttpServletResponse response, ForbiddenReason reason) {
         try {
+            byte[] contentBytes = new JSONObject().put("reason", reason).toString().getBytes("UTF-8");
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            response.setHeader(HEADER_HAWTIO_FORBIDDEN_REASON, reason.name());
-            response.setContentLength(0);
+            response.setContentType("application/json");
+            response.setContentLength(contentBytes.length);
+            response.getOutputStream().write(contentBytes);
             response.flushBuffer();
         } catch (IOException ioe) {
-            LOG.debug("Failed to send forbidden response: {}", ioe.toString());
+            LOG.debug("Failed to send forbidden response: {}", ioe);
         }
     }
 
-    public static void doAuthPrompt(HttpServletResponse response, String realm) {
+    public static void doAuthPrompt(String realm, HttpServletResponse response) {
         // request authentication
         try {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setHeader(HEADER_WWW_AUTHENTICATE, Authenticator.AUTHENTICATION_SCHEME_BASIC + " realm=\"" + realm + "\"");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentLength(0);
             response.flushBuffer();
         } catch (IOException ioe) {
-            LOG.debug("Failed to send auth response: {}", ioe.toString());
+            LOG.debug("Failed to send auth response: {}", ioe);
         }
-    }
-
-    public static void doTooManyRequests(HttpServletResponse response, long retryAfter) {
-        try {
-            // HTTP status code: 429 Too Many Requests
-            // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
-            response.setStatus(429);
-            response.setHeader(HEADER_RETRY_AFTER, Long.toString(retryAfter));
-            response.setContentLength(0);
-            response.flushBuffer();
-        } catch (IOException ioe) {
-            LOG.debug("Failed to send throttling response: {}", ioe.toString());
-        }
-    }
-
-    public static void sendJSONResponse(HttpServletResponse response, boolean value) throws IOException {
-        sendJSONResponse(response, String.valueOf(value));
-    }
-
-    public static void sendJSONResponse(HttpServletResponse response, String json) throws IOException {
-        response.setContentType("application/json");
-        PrintWriter writer = response.getWriter();
-        writer.println(json);
-        writer.flush();
-        writer.close();
     }
 
     public static JSONObject readObject(BufferedReader reader) throws IOException {
         String data = IOHelper.readFully(reader);
-        try {
-            return (JSONObject) new JSONParser().parse(data);
-        } catch (ParseException e) {
-            throw new IOException(e.getMessage(), e);
-        }
+        return new JSONObject(data);
     }
 
     public static void writeEmpty(PrintWriter out) {
@@ -101,11 +70,11 @@ public class ServletHelpers {
         out.close();
     }
 
-    public static void writeObjectAsJson(PrintWriter out, Object data) {
+    public static void writeObject(Converters converters, JsonConvertOptions options, PrintWriter out, Object data) {
         Object result = null;
 
         try {
-            result = SERIALIZER.serialize(data, null, SerializeOptions.DEFAULT);
+            result = converters.getToJsonConverter().convertToJson(data, null, options);
         } catch (AttributeNotFoundException e) {
             LOG.warn("Failed to convert object to json", e);
         }
@@ -119,122 +88,122 @@ public class ServletHelpers {
         }
     }
 
-    public static InputStream loadFile(String path) {
-        if (path.startsWith("classpath:")) {
-            String classPathLocation = path.substring(10);
-            InputStream is = ServletHelpers.class.getClassLoader().getResourceAsStream(classPathLocation);
-            if (is != null) {
-                return is;
-            }
-            // Quarkus dev mode requires thread context classloader
-            // https://github.com/quarkusio/quarkus/issues/2531
-            return Thread.currentThread().getContextClassLoader().getResourceAsStream(classPathLocation);
-        }
-        try {
-            if (!path.contains(":")) {
-                //assume file protocol
-                path = "file://" + path;
-            }
-            return new URL(path).openStream();
-        } catch (Exception e) {
-            LOG.debug("Couldn't find file: {}", path);
-            return null;
-        }
+    public static Map populateTableMapForXl(List listEntry) {
+        listEntry = flatten(listEntry);
+        Map<String, Object> xlData = new HashMap<>();
+        Set columns = getColumns(listEntry);
+        List rowsData = getRowsData(listEntry, columns);
+
+        xlData.put("columns", columns);
+        xlData.put("rows", rowsData);
+        return xlData;
     }
 
-    /**
-     * Strip out unwanted characters from the header such a CR/LF chars
-     */
-    public static String sanitizeHeader(String header) {
-        if (header == null) {
-            return null;
+
+    public static Map populateErrorTableMapForXl(List listEntry) {
+        listEntry = flatten(listEntry);
+
+        Map<String, Object> xlData = new HashMap<>();
+        Set<String> columns = new HashSet<>();
+        columns.add("Error Message");
+        List rowsData = new ArrayList();
+        for (Object o : listEntry) {
+            Map<String, Object> keyValuePairs = new HashMap<>();
+            keyValuePairs.put(columns.toArray()[0].toString(), removeNoisyString(o.toString()));
+            rowsData.add(keyValuePairs);
         }
-        return header.replaceAll("[\\r\\n]", "");
+        xlData.put("columns", columns);
+        xlData.put("rows", rowsData);
+        return xlData;
     }
 
-    /**
-     * Normalizes a path. If the path contains a single '/' character it is returned
-     * unchanged, otherwise the path is:
-     * <ol>
-     * <li>stripped from all multiple consecutive occurrences of '/' characters</li>
-     * <li>stripped from trailing '/' character(s)</li>
-     * </ol>
-     *
-     * @param path
-     *            path to normalize
-     * @return normalized path
-     */
-    public static String cleanPath(final String path) {
-        final String result = path.replaceAll("//+", "/");
-        return result.length() == 1 && result.charAt(0) == '/' ? result
-                : result.replaceAll("/+$", "");
-    }
-
-    /**
-     * Creates a web context path from components. Concatenates all path components
-     * using '/' character as delimiter and the result is then:
-     * <ol>
-     * <li>prefixed with '/' character</li>
-     * <li>stripped from all multiple consecutive occurrences of '/' characters</li>
-     * <li>stripped from trailing '/' character(s)</li>
-     * </ol>
-     *
-     * @return empty string or string which starts with a "/" character but does not
-     *         end with a "/" character
-     */
-    public static String webContextPath(final String first, final String... more) {
-        if (more.length == 0 && (first == null || first.isEmpty())) {
-            return "";
-        }
-
-        final StringBuilder b = new StringBuilder();
-        if (first != null) {
-            if (!first.startsWith("/")) {
-                b.append('/');
-            }
-            b.append(first);
-        }
-
-        for (final String s : more) {
-            if (s != null && !s.isEmpty()) {
-                b.append('/');
-                b.append(s);
+    private static Set getColumns(List listEntry) {
+        Set set = new HashSet();
+        for (Object o : listEntry) {
+            if (o instanceof JSONObject) {
+                set.addAll(((JSONObject) o).keySet());
             }
         }
-
-        final String cleanedPath = cleanPath(b.toString());
-        return cleanedPath.length() == 1 ? "" : cleanedPath;
+        return set;
     }
 
-    /**
-     * Return a number of web path segments that need to be skipped to reach <em>hawtio path</em>. In JakartaEE
-     * environment (WAR) everything after context path is "hawtio path", so {@code 0} is returned. In Spring Boot
-     * we may have to skip some segments (like {@code /actuator/hawtio}).
-     *
-     * @param servletContext
-     * @return
-     */
-    public static int hawtioPathIndex(ServletContext servletContext) {
-        String servletPath = (String) servletContext.getAttribute(SessionExpiryFilter.SERVLET_PATH);
-        if (servletPath == null) {
-            // this attribute is set only in non JakartaEE environments, so here we are in standard WAR
-            // deployment. Just return "0", which means full path without initial context path
-            return 0;
-        } else {
-            // when SessionExpiryFilter.SERVLET_PATH is set, it contains prefix which should be skipped and which
-            // is not standard JakartaEE path components (context path, servlet path, path info).
-            // for Spring Boot we have to skip dispatcher servlet path, management endpoints base ("/actuator")
-            // and management endpoint mapping
-            String cleanPath = webContextPath(servletPath);
-            int pathIndex = 0;
-            // for "/actuator/hawtio", we have to return "2", so count slashes
-            for (char c : cleanPath.toCharArray()) {
-                if (c == '/') {
-                    pathIndex++;
+
+    private static List getRowsData(List listEntry, Set columns) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Object o : listEntry) {
+            Map<String, Object> keyValuePairs = new HashMap<>();
+            if (o instanceof JSONObject) {
+                JSONObject jsonObject = (JSONObject) o;
+                for (Object column : columns) {
+                    Object value = removeNoisyString(jsonObject.get(column.toString()));
+                    keyValuePairs.put(column.toString(), value);
                 }
             }
-            return pathIndex;
+            list.add(keyValuePairs);
         }
+        return list;
     }
 
+
+    public static String generateCsvString(Map xlData) {
+        int idx1 = 0, idx2 = 0;
+        StringBuffer buffer = new StringBuffer();
+        Set columns = (Set) xlData.get("columns");
+        List rows = (List) xlData.get("rows");
+        for (Object column : columns) {
+            buffer.append(wrapWithDoubleQuotes(column.toString()));
+            buffer = appendComma(buffer, columns.size(), idx1);
+            idx1++;
+        }
+        idx1 = 0;
+
+        buffer.append("\n");
+        for (Object row : rows) {
+            Map keyValuePair = (Map) row;
+            for (Object column : columns) {
+                buffer.append(wrapWithDoubleQuotes(keyValuePair.get(column.toString()).toString()));
+                buffer = appendComma(buffer, columns.size(), idx2);
+                idx2++;
+            }
+            idx2 = 0;
+            buffer.append("\n");
+        }
+        return buffer.toString();
+    }
+
+    private static String wrapWithDoubleQuotes(String string) {
+        return "\"" + string + "\"";
+    }
+
+    private static StringBuffer appendComma(StringBuffer buffer, int size, int index) {
+        return (size == (index + 1)) ? buffer : buffer.append(",");
+    }
+
+    public static List flatten(List list) {
+        List tempList = new ArrayList();
+        for (Object o : list) {
+            if (o instanceof Collection) {
+                tempList.addAll((Collection) o);
+            } else tempList.add(o);
+        }
+        return tempList;
+    }
+
+    public static Set flatten(Set set) {
+        Set tempSet = new HashSet();
+        for (Object o : tempSet) {
+            if (o instanceof Collection) {
+                tempSet.addAll((Collection) o);
+            } else tempSet.add(o);
+        }
+        return tempSet;
+    }
+
+    public static String removeNoisyString(Object value) {
+        String string = "";
+        if (value != null) {
+            string = (value.toString().contains("@reference")) ? "" : value.toString();
+        }
+        return string;
+    }
 }

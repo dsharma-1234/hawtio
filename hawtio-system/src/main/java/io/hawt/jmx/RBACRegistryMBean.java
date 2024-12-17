@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright 2005-2016 Red Hat, Inc.
  *
  *  Red Hat licenses this file to you under the Apache License, version
@@ -35,17 +35,8 @@ public interface RBACRegistryMBean {
      * Returns {@link Map} (that can be nicely handled by Jolokia) containing everything that is initially
      * needed by hawtio client application. It's an optimized and dedicated method that runs much faster than
      * sequence of relevant Jolokia operations (LIST+EXEC with maxDepth=7).
-     *
-     * @return The optimised data type of MBean domains and cache
+     * @return
      */
     Map<String, Object> list() throws Exception;
-
-    /**
-     * Returns a subset of MBeans specified by the given inner <code>path</code>.
-     * Everything else works in the same way as {@link #list()}.
-     *
-     * @return The optimised data type of MBean domains and cache
-     */
-    Map<String, Object> list(String path) throws Exception;
 
 }

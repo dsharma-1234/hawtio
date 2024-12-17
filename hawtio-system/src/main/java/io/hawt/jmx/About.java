@@ -4,16 +4,12 @@ import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.util.Properties;
 import javax.management.InstanceAlreadyExistsException;
-import javax.management.InstanceNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
 import io.hawt.util.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class About implements AboutMBean {
-    private static final Logger LOG = LoggerFactory.getLogger(About.class);
 
     private ObjectName objectName;
     private MBeanServer mBeanServer;
@@ -47,11 +43,9 @@ public class About implements AboutMBean {
     }
 
     public void destroy() throws Exception {
-        if (mBeanServer != null && objectName != null) {
-            try {
+        if (mBeanServer != null) {
+            if (objectName != null) {
                 mBeanServer.unregisterMBean(objectName);
-            } catch (InstanceNotFoundException e) {
-                LOG.debug("Error unregistering mbean " + objectName + ". This exception is ignored.", e);
             }
         }
     }

@@ -1,12 +1,14 @@
 package io.hawt.web.auth;
 
 import java.io.IOException;
+import javax.security.auth.Subject;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
+import io.hawt.system.Authenticator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,11 +19,11 @@ public class LogoutServlet extends HttpServlet {
 
     private static final long serialVersionUID = -3504832582691232812L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(LogoutServlet.class);
+    private static final transient Logger LOG = LoggerFactory.getLogger(LogoutServlet.class);
 
-    protected AuthenticationConfiguration authConfiguration;
+    private AuthenticationConfiguration authConfiguration;
 
-    protected Redirector redirector = new Redirector();
+    private Redirector redirector = new Redirector();
 
     @Override
     public void init() {
@@ -30,25 +32,18 @@ public class LogoutServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        LOG.debug("Logging out");
-
-        // Send some HTTP headers on logout
-        addHeaders(response);
-
-        request.logout();
-        if (authConfiguration.isSpringSecurityEnabled()) {
-            AuthSessionHelpers.clear(request, authConfiguration, false);
-            redirector.doRedirect(request, response, "/");
-        } else {
-            AuthSessionHelpers.clear(request, authConfiguration, true);
-            redirector.doRedirect(request, response, AuthenticationConfiguration.LOGIN_URL);
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            LOG.debug("Logging out user: {}", session.getAttribute("user"));
+            Subject subject = (Subject) session.getAttribute("subject");
+            if (subject != null) {
+                Authenticator.logout(authConfiguration, subject);
+            }
+            session.invalidate();
         }
-    }
+        request.logout();
 
-    protected void addHeaders(HttpServletResponse response) {
-        // Do not specify "storage" as local storage contains persistent data such as
-        // preferences and connections but without credentials.
-        response.addHeader("Clear-Site-Data", "\"cache\", \"cookies\"");
+        redirector.doRedirect(request, response, AuthenticationConfiguration.LOGIN_URL);
     }
 
     public void setRedirector(Redirector redirector) {

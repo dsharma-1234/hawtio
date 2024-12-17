@@ -5,19 +5,13 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
 import javax.management.InstanceAlreadyExistsException;
-import javax.management.InstanceNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.TabularData;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class QuartzFacade implements QuartzFacadeMBean {
-    public static final Logger LOG = LoggerFactory.getLogger(QuartzFacade.class);
 
     private ObjectName objectName;
     private MBeanServer mBeanServer;
@@ -43,11 +37,9 @@ public class QuartzFacade implements QuartzFacadeMBean {
     }
 
     public void destroy() throws Exception {
-        if (mBeanServer != null && objectName != null) {
-            try {
+        if (mBeanServer != null) {
+            if (objectName != null) {
                 mBeanServer.unregisterMBean(objectName);
-            } catch (InstanceNotFoundException e) {
-                LOG.debug("Error unregistering mbean " + objectName + ". This exception is ignored.", e);
             }
         }
     }
@@ -57,36 +49,37 @@ public class QuartzFacade implements QuartzFacadeMBean {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void updateSimpleTrigger(String schedulerObjectName, String triggerName, String groupName, int misfireInstruction,
                                     int repeatCount, long repeatInterval) throws Exception {
         if (schedulerObjectName == null) {
-            throw new IllegalArgumentException("Cannot find quartz scheduler with ObjectName: null");
+            throw new IllegalArgumentException("Cannot find quartz scheduler with ObjectName: " + schedulerObjectName);
         }
 
-        ObjectName oName = ObjectName.getInstance(schedulerObjectName);
-        if (!mBeanServer.isRegistered(oName)) {
+        ObjectName on = ObjectName.getInstance(schedulerObjectName);
+        if (!mBeanServer.isRegistered(on)) {
             throw new IllegalArgumentException("Cannot find quartz scheduler with ObjectName: " + schedulerObjectName);
         }
 
         // get existing trigger map
-        CompositeData data = (CompositeData) mBeanServer.invoke(oName, "getTrigger", new Object[] { triggerName, groupName }, new String[] { "java.lang.String", "java.lang.String" });
+        CompositeData data = (CompositeData) mBeanServer.invoke(on, "getTrigger", new Object[]{triggerName, groupName}, new String[]{"java.lang.String", "java.lang.String"});
         if (data == null) {
             throw new IllegalArgumentException("Cannot find trigger details for group: " + groupName + " name: " + triggerName);
         }
         // trigger references job - let's get its data
         String jobName = (String) data.get("jobName");
         String jobGroupName = (String) data.get("jobGroup");
-        CompositeData jobData = (CompositeData) mBeanServer.invoke(oName, "getJobDetail", new Object[] { jobName, jobGroupName }, new String[] { "java.lang.String", "java.lang.String" });
+        CompositeData jobData = (CompositeData) mBeanServer.invoke(on, "getJobDetail", new Object[]{jobName, jobGroupName}, new String[]{"java.lang.String", "java.lang.String"});
         if (jobData == null) {
             throw new IllegalArgumentException("Cannot find job details for group: " + jobGroupName + " name: " + jobName);
         }
 
-        Map<String, Object> jobParams = new HashMap<>();
-        Map<String, Object> jobDataMap = new HashMap<>();
+        Map jobParams = new HashMap();
+        Map jobDataMap = new HashMap();
         initJobParams(jobParams, jobDataMap, jobName, jobGroupName, jobData);
 
-        // also ensure the job data map is up-to-date with the simple trigger changes
-        Map<String, Object> triggerParams = new HashMap<>();
+        // also ensure the job data map is up to date with the simple trigger changes
+        Map triggerParams = new HashMap();
         jobDataMap.put("CamelQuartzTriggerType", "simple");
         triggerParams.put("repeatCount", repeatCount);
         jobDataMap.put("CamelQuartzTriggerSimpleRepeatCounter", repeatCount);
@@ -99,14 +92,15 @@ public class QuartzFacade implements QuartzFacadeMBean {
         triggerParams.put("misfireInstruction", misfireInstruction);
 
         // update trigger
-        mBeanServer.invoke(oName, "scheduleBasicJob", new Object[] { jobParams, triggerParams }, new String[] { "java.util.Map", "java.util.Map" });
+        mBeanServer.invoke(on, "scheduleBasicJob", new Object[]{jobParams, triggerParams}, new String[]{"java.util.Map", "java.util.Map"});
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void updateCronTrigger(String schedulerObjectName, String triggerName, String groupName, int misfireInstruction,
                                   String cronExpression, String timeZone) throws Exception {
         if (schedulerObjectName == null) {
-            throw new IllegalArgumentException("Cannot find quartz scheduler with ObjectName: null");
+            throw new IllegalArgumentException("Cannot find quartz scheduler with ObjectName: " + schedulerObjectName);
         }
 
         ObjectName on = ObjectName.getInstance(schedulerObjectName);
@@ -115,25 +109,25 @@ public class QuartzFacade implements QuartzFacadeMBean {
         }
 
         // get existing trigger map
-        CompositeData data = (CompositeData) mBeanServer.invoke(on, "getTrigger", new Object[] { triggerName, groupName }, new String[] { "java.lang.String", "java.lang.String" });
+        CompositeData data = (CompositeData) mBeanServer.invoke(on, "getTrigger", new Object[]{triggerName, groupName}, new String[]{"java.lang.String", "java.lang.String"});
         if (data == null) {
             throw new IllegalArgumentException("Cannot find trigger details for group: " + groupName + " name: " + triggerName);
         }
         // trigger references job - let's get its data
         String jobName = (String) data.get("jobName");
         String jobGroupName = (String) data.get("jobGroup");
-        CompositeData jobData = (CompositeData) mBeanServer.invoke(on, "getJobDetail", new Object[] { jobName, jobGroupName }, new String[] { "java.lang.String", "java.lang.String" });
+        CompositeData jobData = (CompositeData) mBeanServer.invoke(on, "getJobDetail", new Object[]{jobName, jobGroupName}, new String[]{"java.lang.String", "java.lang.String"});
         if (jobData == null) {
             throw new IllegalArgumentException("Cannot find job details for group: " + jobGroupName + " name: " + jobName);
         }
 
-        Map<String, Object> jobParams = new HashMap<>();
-        Map<String, Object> jobDataMap = new HashMap<>();
+        Map jobParams = new HashMap();
+        Map jobDataMap = new HashMap();
         initJobParams(jobParams, jobDataMap, jobName, jobGroupName, jobData);
 
-        Map<String, Object> triggerParams = new HashMap<>();
+        Map triggerParams = new HashMap();
         jobDataMap.put("CamelQuartzTriggerType", "cron");
-        // also ensure the job data map is up-to-date with the cron trigger changes
+        // also ensure the job data map is up to date with the cron trigger changes
         triggerParams.put("cronExpression", cronExpression);
         jobDataMap.put("CamelQuartzTriggerCronExpression", cronExpression);
         if (timeZone != null) {
@@ -147,10 +141,10 @@ public class QuartzFacade implements QuartzFacadeMBean {
         triggerParams.put("misfireInstruction", misfireInstruction);
 
         // update trigger
-        mBeanServer.invoke(on, "scheduleBasicJob", new Object[] { jobParams, triggerParams }, new String[] { "java.util.Map", "java.util.Map" });
+        mBeanServer.invoke(on, "scheduleBasicJob", new Object[]{jobParams, triggerParams}, new String[]{"java.util.Map", "java.util.Map"});
     }
 
-    private void initJobParams(Map<String, Object> jobParams, Map<String, Object> jobDataMap, String triggerName, String groupName, CompositeData data) {
+    private void initJobParams(Map jobParams, Map jobDataMap, String triggerName, String groupName, CompositeData data) {
         jobParams.put("name", triggerName);
         jobParams.put("group", groupName);
         if (data.get("description") != null) {
@@ -162,11 +156,12 @@ public class QuartzFacade implements QuartzFacadeMBean {
         // JMX API with TabularData and CompositeData is cluttered to use
         TabularData tJobDataMap = (TabularData) data.get("jobDataMap");
         for (Object cKey : tJobDataMap.keySet()) {
-            Object key = ((List<?>) cKey).get(0);
-            CompositeData value = tJobDataMap.get(new Object[] { key });
+            Object key = ((List) cKey).get(0);
+            Object value = tJobDataMap.get(new Object[]{key});
             if (value != null) {
-                Iterator<?> it = value.values().iterator();
-                String tKey = (String) it.next();
+                CompositeData cd = (CompositeData) value;
+                Iterator it = cd.values().iterator();
+                Object tKey = it.next();
                 Object tValue = it.next();
                 jobDataMap.put(tKey, tValue);
             }

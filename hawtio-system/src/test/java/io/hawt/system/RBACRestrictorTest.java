@@ -20,15 +20,15 @@ import javax.management.InstanceNotFoundException;
 import javax.management.ObjectName;
 
 import io.hawt.jmx.JMXSecurity;
-import org.jolokia.server.core.config.StaticConfiguration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.jolokia.config.Configuration;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThat;
 
 public class RBACRestrictorTest {
 
@@ -36,13 +36,13 @@ public class RBACRestrictorTest {
 
     private JMXSecurity mockJMXSecurity;
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         this.mockJMXSecurity = new MockJMXSecurity();
         this.mockJMXSecurity.init();
     }
 
-    @AfterEach
+    @After
     public void tearDown() throws Exception {
         this.mockJMXSecurity.destroy();
         this.mockJMXSecurity = null;
@@ -52,7 +52,7 @@ public class RBACRestrictorTest {
     public void noJMXSecurityMBean() throws Exception {
         // make sure no JMXSecurity MBean is registered
         this.mockJMXSecurity.destroy();
-        RBACRestrictor restrictor = new RBACRestrictor(new StaticConfiguration());
+        RBACRestrictor restrictor = new RBACRestrictor(new Configuration());
         assertThat(restrictor.isOperationAllowed(new ObjectName("hawtio:type=Test"), "anyMethod(java.lang.String)"), is(true));
         assertThat(restrictor.isAttributeReadAllowed(new ObjectName("java.lang:type=Runtime"), "VmName"), is(true));
         assertThat(restrictor.isAttributeWriteAllowed(new ObjectName("java.lang:type=Runtime"), "VmName"), is(true));
@@ -60,7 +60,7 @@ public class RBACRestrictorTest {
 
     @Test
     public void isOperationAllowed() throws Exception {
-        RBACRestrictor restrictor = new RBACRestrictor(new StaticConfiguration());
+        RBACRestrictor restrictor = new RBACRestrictor(new Configuration());
 
         assertThat(restrictor.isOperationAllowed(new ObjectName("hawtio:type=Test"), "allowed()"), is(true));
         assertThat(restrictor.isOperationAllowed(new ObjectName("hawtio:type=Test"), "notAllowed()"), is(false));
@@ -73,7 +73,7 @@ public class RBACRestrictorTest {
 
     @Test
     public void isAttributeReadAllowed() throws Exception {
-        RBACRestrictor restrictor = new RBACRestrictor(new StaticConfiguration());
+        RBACRestrictor restrictor = new RBACRestrictor(new Configuration());
         assertThat(restrictor.isAttributeReadAllowed(new ObjectName("java.lang:type=Runtime"), "VmName"), is(true));
         assertThat(restrictor.isAttributeReadAllowed(new ObjectName("java.lang:type=Memory"), "Verbose"), is(true));
         assertThat(restrictor.isAttributeReadAllowed(new ObjectName("java.lang:type=Runtime"), "VmVersion"), is(false));
@@ -83,16 +83,16 @@ public class RBACRestrictorTest {
 
     @Test
     public void isAttributeWriteAllowed() throws Exception {
-        RBACRestrictor restrictor = new RBACRestrictor(new StaticConfiguration());
+        RBACRestrictor restrictor = new RBACRestrictor(new Configuration());
         assertThat(restrictor.isAttributeWriteAllowed(new ObjectName("java.lang:type=Memory"), "Verbose"), is(true));
         assertThat(restrictor.isAttributeWriteAllowed(new ObjectName("java.lang:type=Runtime"), "VmVersion"), is(false));
         assertThat(restrictor.isAttributeWriteAllowed(new ObjectName("java.lang:type=Runtime"), "xxx"), is(false));
         assertThat(restrictor.isAttributeWriteAllowed(new ObjectName("hawtio:type=NoSuchType"), "Whatever"), is(false));
     }
 
-    private static class MockJMXSecurity extends JMXSecurity {
+    private class MockJMXSecurity extends JMXSecurity {
         @Override
-        public boolean canInvoke(String objectName, String methodName) {
+        public boolean canInvoke(String objectName, String methodName) throws Exception {
             return false;
         }
 

@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -13,7 +12,6 @@ import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
-import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -32,12 +30,13 @@ import org.w3c.dom.NodeList;
  */
 public class TomcatUserDatabaseLoginContext implements LoginModule {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TomcatUserDatabaseLoginContext.class);
+    private static final transient Logger LOG = LoggerFactory.getLogger(TomcatUserDatabaseLoginContext.class);
     private Subject subject;
     private CallbackHandler callbackHandler;
-    private final String fileName = "conf/tomcat-users.xml";
+    private String fileName = "conf/tomcat-users.xml";
     private File file;
     private String digestAlgorithm;
+
 
     private static final Map<String, Predicate<PasswordPair>> PASSWORD_CHECKS;
     public static final String OPTION_DIGEST_ALGORITHM = "DIGEST_ALGORITHM";
@@ -46,30 +45,56 @@ public class TomcatUserDatabaseLoginContext implements LoginModule {
     static {
         Map<String, Predicate<PasswordPair>> temp = new HashMap<>(6);
         temp.put(
-            "NONE",
-            passwordPair -> passwordPair.getFilePassword().equals(passwordPair.getSuppliedPassword()));
+                "NONE",
+                new Predicate<PasswordPair>() {
+                    @Override
+                    public boolean evaluate(final PasswordPair passwordPair) {
+                        return passwordPair.getFilePassword().equals(passwordPair.getSuppliedPassword());
+                    }
+                });
         temp.put(
-            "MD5",
-            new Predicate<PasswordPair>() {
-                @Override
-                public boolean evaluate(final PasswordPair passwordPair) {
-                    return passwordPair.getFilePassword().equals(DigestUtils.md5Hex(passwordPair.getSuppliedPassword()));
-                }
-            });
+                "MD5",
+                new Predicate<PasswordPair>() {
+                    @Override
+                    public boolean evaluate(final PasswordPair passwordPair) {
+                        return passwordPair.getFilePassword().equals(DigestUtils.md5Hex(passwordPair.getSuppliedPassword()));
+                    }
+                });
         temp.put(
-            "SHA-256",
-            passwordPair -> passwordPair.getFilePassword().equals(DigestUtils.sha256Hex(passwordPair.getSuppliedPassword())));
+                "SHA-256",
+                new Predicate<PasswordPair>() {
+                    @Override
+                    public boolean evaluate(final PasswordPair passwordPair) {
+                        return passwordPair.getFilePassword().equals(DigestUtils.sha256Hex(passwordPair.getSuppliedPassword()));
+                    }
+                });
         temp.put(
-            "SHA",
-            passwordPair -> passwordPair.getFilePassword().equals(DigestUtils.shaHex(passwordPair.getSuppliedPassword())));
+                "SHA",
+                new Predicate<PasswordPair>() {
+                    @Override
+                    public boolean evaluate(final PasswordPair passwordPair) {
+                        return passwordPair.getFilePassword().equals(DigestUtils.shaHex(passwordPair.getSuppliedPassword()));
+                    }
+                });
         temp.put(
-            "SHA-512",
-            passwordPair -> passwordPair.getFilePassword().equals(DigestUtils.sha512Hex(passwordPair.getSuppliedPassword())));
+                "SHA-512",
+                new Predicate<PasswordPair>() {
+                    @Override
+                    public boolean evaluate(final PasswordPair passwordPair) {
+                        return passwordPair.getFilePassword().equals(DigestUtils.sha512Hex(passwordPair.getSuppliedPassword()));
+                    }
+                });
         temp.put(
-            "SHA-384",
-            passwordPair -> passwordPair.getFilePassword().equals(DigestUtils.sha384Hex(passwordPair.getSuppliedPassword())));
+                "SHA-384",
+                new Predicate<PasswordPair>() {
+                    @Override
+                    public boolean evaluate(final PasswordPair passwordPair) {
+                        return passwordPair.getFilePassword().equals(DigestUtils.sha384Hex(passwordPair.getSuppliedPassword()));
+                    }
+                });
         PASSWORD_CHECKS = Collections.unmodifiableMap(temp);
     }
+
 
     @Override
     public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {
@@ -81,13 +106,13 @@ public class TomcatUserDatabaseLoginContext implements LoginModule {
             this.file = new File(customLocation.toString(), "tomcat-users.xml");
         }
 
-        if (file == null || !file.exists()) {
+        if (file == null || ! file.exists()) {
             String base = System.getProperty("catalina.base", ".");
             LOG.debug("Using base directory: {}", base);
             this.file = new File(base, fileName);
         }
 
-        if (!file.exists()) {
+        if (! file.exists()) {
             String msg = "Cannot find Apache Tomcat user database file: " + file;
             LOG.warn(msg);
             throw new IllegalStateException(msg);
@@ -95,7 +120,7 @@ public class TomcatUserDatabaseLoginContext implements LoginModule {
 
         digestAlgorithm = options.get(OPTION_DIGEST_ALGORITHM).toString();
 
-        if (!PASSWORD_CHECKS.containsKey(digestAlgorithm)) {
+        if (! PASSWORD_CHECKS.containsKey(digestAlgorithm)) {
             String msg = "Invalid digest algorithm specified: " + digestAlgorithm + " (valid: " + PASSWORD_CHECKS.keySet() + ")";
             LOG.warn(msg);
             throw new IllegalStateException(msg);
@@ -119,7 +144,7 @@ public class TomcatUserDatabaseLoginContext implements LoginModule {
             LOG.debug("Getting user details for username {}", username);
             String[] user = getUserPasswordRole(username);
             if (user != null) {
-                if (!passwordsMatch(new PasswordPair(user[1], password))) {
+                if (! passwordsMatch(new PasswordPair(user[1], password))) {
                     LOG.trace("Login denied due password did not match");
                     return false;
                 }
@@ -151,12 +176,12 @@ public class TomcatUserDatabaseLoginContext implements LoginModule {
     }
 
     @Override
-    public boolean commit() {
+    public boolean commit() throws LoginException {
         return true;
     }
 
     @Override
-    public boolean abort() {
+    public boolean abort() throws LoginException {
         return true;
     }
 
@@ -170,11 +195,6 @@ public class TomcatUserDatabaseLoginContext implements LoginModule {
     protected String[] getUserPasswordRole(String username) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
-
-        factory.setFeature( "http://xml.org/sax/features/external-parameter-entities",false);
-        factory.setFeature( "http://apache.org/xml/features/nonvalidating/load-external-dtd",false);
-        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document dom = builder.parse(file);
 
@@ -185,7 +205,7 @@ public class TomcatUserDatabaseLoginContext implements LoginModule {
             String nPassword = node.getAttributes().getNamedItem("password").getNodeValue();
             String nRoles = node.getAttributes().getNamedItem("roles").getNodeValue();
             if (username.equals(nUsername)) {
-                return new String[] { username, nPassword, nRoles };
+                return new String[] {username, nPassword, nRoles};
             }
         }
         return null;

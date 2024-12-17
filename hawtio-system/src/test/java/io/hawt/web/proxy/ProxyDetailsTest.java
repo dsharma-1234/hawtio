@@ -1,176 +1,170 @@
 package io.hawt.web.proxy;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 
-import jakarta.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequest;
 
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
+import org.junit.Ignore;
+import org.junit.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ProxyDetailsTest {
 
     @Test
-    public void testPathInfoWithUserPasswordPort() {
+    public void testPathInfoWithUserPasswordPort() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/admin:admin@localhost/8181/jolokia/");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertEquals("admin", details.getUserName());
-        assertEquals("admin", details.getPassword());
-        assertEquals("localhost", details.getHost());
-        assertEquals("localhost:8181", details.getHostAndPort());
-        assertEquals(8181, details.getPort());
-        assertEquals("/jolokia/", details.getProxyPath());
-        assertEquals("http", details.getScheme());
-        assertEquals("http://localhost:8181/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", "admin", details.getUserName());
+        assertEquals("getPassword()", "admin", details.getPassword());
+        assertEquals("getHost()", "localhost", details.getHost());
+        assertEquals("getHostAndPort()", "localhost:8181", details.getHostAndPort());
+        assertEquals("getPort()", 8181, details.getPort());
+        assertEquals("getProxyPath()", "/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "http", details.getScheme());
+        assertEquals("getFullProxyUrl()", "http://localhost:8181/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    public void testPathInfoWithUserPasswordDefaultPort() {
+    public void testPathInfoWithUserPasswordDefaultPort() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/admin:admin@localhost//jolokia/");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertEquals("admin", details.getUserName());
-        assertEquals("admin", details.getPassword());
-        assertEquals("localhost", details.getHost());
-        assertEquals("localhost", details.getHostAndPort());
-        assertEquals(80, details.getPort());
-        assertEquals("/jolokia/", details.getProxyPath());
-        assertEquals("http", details.getScheme());
-        assertEquals("http://localhost/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", "admin", details.getUserName());
+        assertEquals("getPassword()", "admin", details.getPassword());
+        assertEquals("getHost()", "localhost", details.getHost());
+        assertEquals("getHostAndPort()", "localhost", details.getHostAndPort());
+        assertEquals("getPort()", 80, details.getPort());
+        assertEquals("getProxyPath()", "/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "http", details.getScheme());
+        assertEquals("getFullProxyUrl()", "http://localhost/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    public void testPathInfoWithDefaultPort() {
+    public void testPathInfoWithDefaultPort() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/localhost//jolokia/");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("localhost", details.getHost());
-        assertEquals("localhost", details.getHostAndPort());
-        assertEquals(80, details.getPort());
-        assertEquals("/jolokia/", details.getProxyPath());
-        assertEquals("http", details.getScheme());
-        assertEquals("http://localhost/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "localhost", details.getHost());
+        assertEquals("getHostAndPort()", "localhost", details.getHostAndPort());
+        assertEquals("getPort()", 80, details.getPort());
+        assertEquals("getProxyPath()", "/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "http", details.getScheme());
+        assertEquals("getFullProxyUrl()", "http://localhost/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    public void testPathInfoWithPort() {
+    public void testPathInfoWithPort() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/localhost/90/jolokia/");
 
         ProxyDetails details = new ProxyDetails(mockReq);
-
-
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("localhost", details.getHost());
-        assertEquals("localhost:90", details.getHostAndPort());
-        assertEquals(90, details.getPort());
-        assertEquals("/jolokia/", details.getProxyPath());
-        assertEquals("http", details.getScheme());
-        assertEquals("http://localhost:90/jolokia/", details.getFullProxyUrl());
+        
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "localhost", details.getHost());
+        assertEquals("getHostAndPort()", "localhost:90", details.getHostAndPort());
+        assertEquals("getPort()", 90, details.getPort());
+        assertEquals("getProxyPath()", "/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "http", details.getScheme());
+        assertEquals("getFullProxyUrl()", "http://localhost:90/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    public void testPathInfoWithWhitespace() {
+    public void testPathInfoWithWhitespace() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/http/localhost/10001/jolokia/read/java.lang:type=MemoryManager,name=Metaspace Manager/Name");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertEquals(details.getFullProxyUrl(), "http://localhost:10001/jolokia/read/java.lang:type=MemoryManager,name=Metaspace%20Manager/Name", "getFullProxyUrl()");
+        assertEquals("getFullProxyUrl()", "http://localhost:10001/jolokia/read/java.lang:type=MemoryManager,name=Metaspace%20Manager/Name", details.getFullProxyUrl());
     }
 
     @Test
-    public void testDefaultPort() {
+    public void testDefaultPort() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/somerest-davsclaus2.rhcloud.com/cxf/crm/customerservice/customers/123");
 
         ProxyDetails details = new ProxyDetails(mockReq);
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("somerest-davsclaus2.rhcloud.com", details.getHost());
-        assertEquals("somerest-davsclaus2.rhcloud.com", details.getHostAndPort());
-        assertEquals(80, details.getPort());
-        assertEquals("/cxf/crm/customerservice/customers/123", details.getProxyPath());
-        assertEquals("http", details.getScheme());
-        assertEquals("http://somerest-davsclaus2.rhcloud.com/cxf/crm/customerservice/customers/123", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "somerest-davsclaus2.rhcloud.com", details.getHost());
+        assertEquals("getHostAndPort()", "somerest-davsclaus2.rhcloud.com", details.getHostAndPort());
+        assertEquals("getPort()", 80, details.getPort());
+        assertEquals("getProxyPath()", "/cxf/crm/customerservice/customers/123", details.getProxyPath());
+        assertEquals("getScheme()", "http", details.getScheme());
+        assertEquals("getFullProxyUrl()", "http://somerest-davsclaus2.rhcloud.com/cxf/crm/customerservice/customers/123", details.getFullProxyUrl());
     }
 
     @Test
-    public void testHttpsUrl() {
+    public void testHttpsUrl() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/https://www.myhost.com/443/myApp/jolokia/");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("www.myhost.com", details.getHost());
-        assertEquals("www.myhost.com:443", details.getHostAndPort());
-        assertEquals(443, details.getPort());
-        assertEquals("/myApp/jolokia/", details.getProxyPath());
-        assertEquals("https", details.getScheme());
-        assertEquals("https://www.myhost.com:443/myApp/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "www.myhost.com", details.getHost());
+        assertEquals("getHostAndPort()", "www.myhost.com:443", details.getHostAndPort());
+        assertEquals("getPort()", 443, details.getPort());
+        assertEquals("getProxyPath()", "/myApp/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "https", details.getScheme());
+        assertEquals("getFullProxyUrl()", "https://www.myhost.com:443/myApp/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    @Disabled("auth-info not supported")
-    public void testHttpsWithCredentialsUrl() {
+    @Ignore("auth-info not supported")
+    public void testHttpsWithCredentialsUrl() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/https://test:user@www.myhost.com/443/myApp/jolokia/");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertEquals("test", details.getUserName());
-        assertEquals("user", details.getPassword());
-        assertEquals("www.myhost.com", details.getHost());
-        assertEquals("www.myhost.com", details.getHostAndPort());
-        assertEquals(443, details.getPort());
-        assertEquals("/myApp/jolokia/", details.getProxyPath());
-        assertEquals("https", details.getScheme());
-        assertEquals("https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", "test", details.getUserName());
+        assertEquals("getPassword()", "user", details.getPassword());
+        assertEquals("getHost()", "www.myhost.com", details.getHost());
+        assertEquals("getHostAndPort()", "www.myhost.com", details.getHostAndPort());
+        assertEquals("getPort()", 443, details.getPort());
+        assertEquals("getProxyPath()", "/myApp/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "https", details.getScheme());
+        assertEquals("getFullProxyUrl()", "https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    public void testHttpsUrlWithNoPort() {
+    public void testHttpsUrlWithNoPort() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/https://www.myhost.com/myApp/jolokia/");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("www.myhost.com", details.getHost());
-        assertEquals("www.myhost.com", details.getHostAndPort());
-        assertEquals(443, details.getPort());
-        assertEquals("/myApp/jolokia/", details.getProxyPath());
-        assertEquals("https", details.getScheme());
-        assertEquals("https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "www.myhost.com", details.getHost());
+        assertEquals("getHostAndPort()", "www.myhost.com", details.getHostAndPort());
+        assertEquals("getPort()", 443, details.getPort());
+        assertEquals("getProxyPath()", "/myApp/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "https", details.getScheme());
+        assertEquals("getFullProxyUrl()", "https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    @Disabled("Mock code must support getParameterNames/getParameterValues")
-    public void testWithQueryString() {
+    @Ignore("Mock code must support getParameterNames/getParameterValues")
+    public void testWithQueryString() throws Exception {
 
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/https://www.myhost.com/myApp/jolokia/");
@@ -178,75 +172,73 @@ public class ProxyDetailsTest {
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("www.myhost.com", details.getHost());
-        assertEquals("www.myhost.com", details.getHostAndPort());
-        assertEquals(443, details.getPort());
-
-
-        assertEquals("/myApp/jolokia/", details.getProxyPath());
-        assertEquals("https", details.getScheme());
-        assertEquals("https://www.myhost.com/myApp/jolokia/?foo=bar", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "www.myhost.com", details.getHost());
+        assertEquals("getHostAndPort()", "www.myhost.com", details.getHostAndPort());
+        assertEquals("getPort()", 443, details.getPort());
+        assertEquals("getProxyPath()", "/myApp/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "https", details.getScheme());
+        assertEquals("getFullProxyUrl()", "https://www.myhost.com/myApp/jolokia/?foo=bar", details.getFullProxyUrl());
     }
 
     @Test
-    public void testQueryStringWithIgnoredParameter() {
+    public void testQueryStringWithIgnoredParameter() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/https://www.myhost.com/myApp/jolokia/");
         when(mockReq.getQueryString()).thenReturn("url=bar");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("www.myhost.com", details.getHost());
-        assertEquals("www.myhost.com", details.getHostAndPort());
-        assertEquals(443, details.getPort());
-        assertEquals("/myApp/jolokia/", details.getProxyPath());
-        assertEquals("https", details.getScheme());
-        assertEquals("https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "www.myhost.com", details.getHost());
+        assertEquals("getHostAndPort()", "www.myhost.com", details.getHostAndPort());
+        assertEquals("getPort()", 443, details.getPort());
+        assertEquals("getProxyPath()", "/myApp/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "https", details.getScheme());
+        assertEquals("getFullProxyUrl()", "https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    public void testQueryStringWithMultipleIgnoredParameters() {
+    public void testQueryStringWithMultipleIgnoredParameters() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/https://www.myhost.com/myApp/jolokia/");
         when(mockReq.getQueryString()).thenReturn("url=bar&_user=test");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("www.myhost.com", details.getHost());
-        assertEquals("www.myhost.com", details.getHostAndPort());
-        assertEquals(443, details.getPort());
-        assertEquals("/myApp/jolokia/", details.getProxyPath());
-        assertEquals("https", details.getScheme());
-        assertEquals("https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "www.myhost.com", details.getHost());
+        assertEquals("getHostAndPort()", "www.myhost.com", details.getHostAndPort());
+        assertEquals("getPort()", 443, details.getPort());
+        assertEquals("getProxyPath()", "/myApp/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "https", details.getScheme());
+        assertEquals("getFullProxyUrl()", "https://www.myhost.com/myApp/jolokia/", details.getFullProxyUrl());
     }
 
     @Test
-    @Disabled("Mock code must support getParameterNames/getParameterValues")
-    public void testQueryStringWithMultipleIgnoredAndValidParameters() {
+    @Ignore("Mock code must support getParameterNames/getParameterValues")
+    public void testQueryStringWithMultipleIgnoredAndValidParameters() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo()).thenReturn("/https://www.myhost.com/myApp/jolokia/");
         when(mockReq.getQueryString()).thenReturn("url=bar&search=1234&_user=test&page=4");
 
         ProxyDetails details = new ProxyDetails(mockReq);
 
-        assertNull(details.getUserName(), "getUserName()");
-        assertNull(details.getPassword(), "getPassword()");
-        assertEquals("www.myhost.com", details.getHost());
-        assertEquals("www.myhost.com", details.getHostAndPort());
-        assertEquals(443, details.getPort());
-        assertEquals("/myApp/jolokia/", details.getProxyPath());
-        assertEquals("https", details.getScheme());
-        assertEquals("https://www.myhost.com/myApp/jolokia/?search=1234&page=4", details.getFullProxyUrl());
+        assertEquals("getUserName()", null, details.getUserName());
+        assertEquals("getPassword()", null, details.getPassword());
+        assertEquals("getHost()", "www.myhost.com", details.getHost());
+        assertEquals("getHostAndPort()", "www.myhost.com", details.getHostAndPort());
+        assertEquals("getPort()", 443, details.getPort());
+        assertEquals("getProxyPath()", "/myApp/jolokia/", details.getProxyPath());
+        assertEquals("getScheme()", "https", details.getScheme());
+        assertEquals("getFullProxyUrl()", "https://www.myhost.com/myApp/jolokia/?search=1234&page=4", details.getFullProxyUrl());
     }
 
     @Test
-    public void testIsAllowed() {
+    public void testIsAllowed() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo())
             .thenReturn("/localhost/9000/jolokia/")
@@ -256,36 +248,36 @@ public class ProxyDetailsTest {
             .thenReturn("/myhost22.com/jolokia/")
             .thenReturn("/www.banned.com/jolokia/");
 
-        Set<String> allowlist = new HashSet<>(Arrays.asList("localhost", "www.myhost.com"));
-        List<Pattern> regexAllowlist = Collections.singletonList(Pattern.compile("myhost[0-9]+\\.com"));
+        Set<String> whitelist = new HashSet<>(Arrays.asList("localhost", "www.myhost.com"));
+        List<Pattern> regexWhitelist = Collections.singletonList(Pattern.compile("myhost[0-9]+\\.com"));
         ProxyDetails details1 = new ProxyDetails(mockReq);
         ProxyDetails details2 = new ProxyDetails(mockReq);
         ProxyDetails details3 = new ProxyDetails(mockReq);
         ProxyDetails details4 = new ProxyDetails(mockReq);
         ProxyDetails details5 = new ProxyDetails(mockReq);
         ProxyDetails details6 = new ProxyDetails(mockReq);
-        assertTrue(details1.isAllowed(allowlist), "localhost/9000");
-        assertTrue(details2.isAllowed(allowlist), "localhost:8181");
-        assertTrue(details3.isAllowed(allowlist), "www.myhost.com");
-        assertTrue(details4.isAllowed(regexAllowlist), "myhost1.com");
-        assertTrue(details5.isAllowed(regexAllowlist), "myhost22.com");
-        assertFalse(details6.isAllowed(allowlist), "www.banned.com");
+        assertTrue("localhost/9000", details1.isAllowed(whitelist));
+        assertTrue("localhost:8181", details2.isAllowed(whitelist));
+        assertTrue("www.myhost.com", details3.isAllowed(whitelist));
+        assertTrue("myhost1.com", details4.isAllowed(regexWhitelist));
+        assertTrue("myhost22.com", details5.isAllowed(regexWhitelist));
+        assertFalse("www.banned.com", details6.isAllowed(whitelist));
     }
 
     @Test
-    public void testIsAllowedWithAllowAll() {
+    public void testIsAllowedWithAllowAll() throws Exception {
         HttpServletRequest mockReq = mock(HttpServletRequest.class);
         when(mockReq.getPathInfo())
             .thenReturn("/localhost/9000/jolokia/")
             .thenReturn("/www.myhost.com/jolokia/")
             .thenReturn("/www.banned.com/jolokia/");
 
-        Set<String> allowlist = new HashSet<>(Collections.singletonList("*"));
+        Set<String> whitelist = new HashSet<>(Arrays.asList("*"));
         ProxyDetails details1 = new ProxyDetails(mockReq);
         ProxyDetails details2 = new ProxyDetails(mockReq);
         ProxyDetails details3 = new ProxyDetails(mockReq);
-        assertTrue(details1.isAllowed(allowlist), "localhost");
-        assertTrue(details2.isAllowed(allowlist), "www.myhost.com");
-        assertTrue(details3.isAllowed(allowlist), "www.banned.com");
+        assertTrue("localhost", details1.isAllowed(whitelist));
+        assertTrue("www.myhost.com", details2.isAllowed(whitelist));
+        assertTrue("www.banned.com", details3.isAllowed(whitelist));
     }
 }

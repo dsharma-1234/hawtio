@@ -1,11 +1,67 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+<web-app xmlns="http://java.sun.com/xml/ns/javaee"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_5_0.xsd"
-         version="5.0">
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
+         version="3.0">
 
   <description>hawtio</description>
   <display-name>hawtio</display-name>
+
+  <env-entry>
+    <description>Enable/disable hawtio's authentication filter, value is really a boolean</description>
+    <env-entry-name>hawtio/authenticationEnabled</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value>true</env-entry-value>
+  </env-entry>
+
+  <env-entry>
+    <description>Authorized user role, empty string disables authorization</description>
+    <env-entry-name>hawtio/role</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value></env-entry-value>
+  </env-entry>
+
+  <env-entry>
+    <description>JAAS classname that would contain the role principal, empty string disables authorization</description>
+    <env-entry-name>hawtio/rolePrincipalClasses</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value></env-entry-value>
+  </env-entry>
+
+  <env-entry>
+    <description>JAAS realm used to authenticate users</description>
+    <env-entry-name>hawtio/realm</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value>*</env-entry-value>
+  </env-entry>
+
+  <env-entry>
+    <description>AuthenticationContainerDiscovery classes divided by comma, used to discover container environments</description>
+    <env-entry-name>hawtio/authenticationContainerDiscoveryClasses</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value>io.hawt.web.tomcat.TomcatAuthenticationContainerDiscovery</env-entry-value>
+  </env-entry>
+
+  <env-entry>
+    <description>Enable/disable Keycloak integration. Value is really a boolean</description>
+    <env-entry-name>hawtio/keycloakEnabled</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value>false</env-entry-value>
+  </env-entry>
+
+  <env-entry>
+    <description>Keycloak config file used for frontend. Will use default location if not provided</description>
+    <env-entry-name>hawtio/keycloakClientConfig</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value></env-entry-value>
+  </env-entry>
+
+  <env-entry>
+    <description>The maximum time interval, in seconds, that the servlet container will keep this session open between client accesses.</description>
+    <env-entry-name>hawtio/sessionTimeout</env-entry-name>
+    <env-entry-type>java.lang.String</env-entry-type>
+    <env-entry-value></env-entry-value>
+  </env-entry>
 
   <filter>
     <filter-name>SessionExpiryFilter</filter-name>
@@ -89,30 +145,20 @@
   </filter-mapping>
 
   <filter>
-    <filter-name>ReferrerPolicyFilter</filter-name>
-    <filter-class>io.hawt.web.filters.ReferrerPolicyFilter</filter-class>
-  </filter>
-  <filter-mapping>
-    <filter-name>ReferrerPolicyFilter</filter-name>
-    <url-pattern>/*</url-pattern>
-  </filter-mapping>
-
-  <filter>
     <filter-name>AuthenticationFilter</filter-name>
     <filter-class>io.hawt.web.auth.AuthenticationFilter</filter-class>
   </filter>
   <filter-mapping>
     <filter-name>AuthenticationFilter</filter-name>
     <url-pattern>/jolokia/*</url-pattern>
-    <url-pattern>/proxy/*</url-pattern>
   </filter-mapping>
 
   <filter>
-    <filter-name>ClientRouteRedirectFilter</filter-name>
-    <filter-class>io.hawt.web.auth.ClientRouteRedirectFilter</filter-class>
+    <filter-name>LoginRedirectFilter</filter-name>
+    <filter-class>io.hawt.web.auth.LoginRedirectFilter</filter-class>
   </filter>
   <filter-mapping>
-    <filter-name>ClientRouteRedirectFilter</filter-name>
+    <filter-name>LoginRedirectFilter</filter-name>
     <url-pattern>/*</url-pattern>
   </filter-mapping>
 
@@ -124,19 +170,10 @@
     <filter-name>BaseTagHrefFilter</filter-name>
     <url-pattern>/</url-pattern>
     <url-pattern>/index.html</url-pattern>
+    <url-pattern>/login.html</url-pattern>
     <dispatcher>ERROR</dispatcher>
     <dispatcher>FORWARD</dispatcher>
     <dispatcher>REQUEST</dispatcher>
-  </filter-mapping>
-
-  <filter>
-    <filter-name>FlightRecorderDownloadFacade</filter-name>
-    <filter-class>io.hawt.web.filters.FlightRecordingDownloadFacade</filter-class>
-  </filter>
-  <filter-mapping>
-    <filter-name>FlightRecorderDownloadFacade</filter-name>
-    <url-pattern>/jolokia/*</url-pattern>
-    <url-pattern>/proxy/*</url-pattern>
   </filter-mapping>
 
   <servlet>
@@ -155,8 +192,13 @@
       <param-name>includeStackTrace</param-name>
       <param-value>false</param-value>
     </init-param>
+    <init-param>
+      <param-name>restrictorClass</param-name>
+      <param-value>io.hawt.system.RBACRestrictor</param-value>
+    </init-param>
     <load-on-startup>1</load-on-startup>
   </servlet>
+
   <servlet-mapping>
     <servlet-name>jolokia-agent</servlet-name>
     <url-pattern>/jolokia/*</url-pattern>
@@ -170,7 +212,7 @@
       '*' allows all hosts but keep in mind it's vulnerable to security attacks.
     -->
     <init-param>
-      <param-name>proxyAllowlist</param-name>
+      <param-name>proxyWhitelist</param-name>
       <param-value>
         localhost,
         127.0.0.1
@@ -190,15 +232,6 @@
   <servlet-mapping>
     <servlet-name>user</servlet-name>
     <url-pattern>/user/*</url-pattern>
-  </servlet-mapping>
-
-  <servlet>
-    <servlet-name>auth-config</servlet-name>
-    <servlet-class>io.hawt.web.auth.AuthConfigurationServlet</servlet-class>
-  </servlet>
-  <servlet-mapping>
-    <servlet-name>auth-config</servlet-name>
-    <url-pattern>/auth/config/*</url-pattern>
   </servlet-mapping>
 
   <servlet>
@@ -228,15 +261,6 @@
     <url-pattern>/keycloak/*</url-pattern>
   </servlet-mapping>
 
-  <servlet>
-    <servlet-name>plugin</servlet-name>
-    <servlet-class>io.hawt.web.plugin.PluginServlet</servlet-class>
-  </servlet>
-  <servlet-mapping>
-    <servlet-name>plugin</servlet-name>
-    <url-pattern>/plugin/*</url-pattern>
-  </servlet-mapping>
-
   <mime-mapping>
     <extension>woff</extension>
     <mime-type>application/font-woff</mime-type>
@@ -246,14 +270,35 @@
     <listener-class>io.hawt.HawtioContextListener</listener-class>
   </listener>
 
+  <listener>
+    <listener-class>io.hawt.blueprint.HawtioBlueprintContextListener</listener-class>
+  </listener>
+
+  <context-param>
+    <param-name>blueprintProperties</param-name>
+    <param-value>blueprint.properties</param-value>
+  </context-param>
+  <context-param>
+    <param-name>blueprintLocation</param-name>
+    <param-value>OSGI-INF/blueprint/blueprint.xml</param-value>
+  </context-param>
+
+  <error-page>
+    <error-code>404</error-code>
+    <location>/index.html</location>
+  </error-page>
+
   <welcome-file-list>
     <welcome-file>index.html</welcome-file>
   </welcome-file-list>
 
+  <!-- There is a bug in Karaf 4.1.x for loading <session-config>.
+       Commenting this out for now to keep Karaf 4.1 support.
   <session-config>
     <cookie-config>
       <http-only>true</http-only>
     </cookie-config>
   </session-config>
+  -->
 
 </web-app>

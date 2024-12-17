@@ -2,8 +2,9 @@ package io.hawt.web.auth;
 
 import java.util.regex.Pattern;
 
-import io.hawt.web.ServletHelpers;
-import jakarta.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequest;
+
+import io.hawt.util.Strings;
 
 /**
  * URI path relative to a given index. An index represents the number of path
@@ -61,13 +62,11 @@ public class RelativeRequestUri {
             throw new IllegalArgumentException("pathIndex is negative");
         }
 
-        final String requestUri = ServletHelpers.webContextPath(request.getRequestURI());
+        final String requestUri = Strings.webContextPath(request.getRequestURI());
         int start = request.getContextPath().length();
         if (start < requestUri.length() && requestUri.charAt(start) == '/') {
             start++;
         }
-        // when context path is "/hawtio" and full URI is "/hawtio/jolokia/version",
-        // "start" now points to "j"
 
         if (pathIndex != 0) {
             int c = 0;

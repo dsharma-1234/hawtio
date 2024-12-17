@@ -4,7 +4,6 @@ import java.lang.management.ManagementFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.management.InstanceAlreadyExistsException;
-import javax.management.InstanceNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.MBeanServerDelegate;
 import javax.management.Notification;
@@ -17,17 +16,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A simple MBean to watch the JMX tree, so it's easy for clients to know when they should refresh
+ * A simple mbean to watch the JMX tree so its easy for clients to know when they should refresh
  * their JMX trees (which typically isn't a cheap operation).
  */
 public class JmxTreeWatcher implements JmxTreeWatcherMBean {
-    private static final Logger LOG = LoggerFactory.getLogger(JmxTreeWatcher.class);
-    private static final AtomicBoolean logged = new AtomicBoolean();
+    private static final transient Logger LOG = LoggerFactory.getLogger(JmxTreeWatcher.class);
+    private static AtomicBoolean logged = new AtomicBoolean();
 
     private ObjectName objectName;
     private MBeanServer mBeanServer;
-    private final AtomicLong counter = new AtomicLong(0);
+    private AtomicLong counter = new AtomicLong(0);
     private NotificationListener listener;
+    private NotificationFilter filter;
     private String version;
 
     public void init() throws Exception {
@@ -48,10 +48,12 @@ public class JmxTreeWatcher implements JmxTreeWatcherMBean {
                 mBeanServer.registerMBean(this, objectName);
             }
 
-            listener = getNotificationListener();
-            NotificationFilter filter = getNotificationFilter();
+            Object handback = null;
 
-            mBeanServer.addNotificationListener(MBeanServerDelegate.DELEGATE_NAME, listener, filter, null);
+            listener = getNotificationListener();
+            filter = getNotificationFilter();
+
+            mBeanServer.addNotificationListener(MBeanServerDelegate.DELEGATE_NAME, listener, filter, handback);
         }
         if (logged.compareAndSet(false, true)) {
             LOG.info("Welcome to Hawtio {}", getVersion());
@@ -64,11 +66,7 @@ public class JmxTreeWatcher implements JmxTreeWatcherMBean {
                 mBeanServer.removeNotificationListener(MBeanServerDelegate.DELEGATE_NAME, listener);
             }
             if (objectName != null) {
-                try {
-                    mBeanServer.unregisterMBean(objectName);
-                } catch (InstanceNotFoundException e) {
-                    LOG.debug("Error unregistering mbean " + objectName + ". This exception is ignored.", e);
-                }
+                mBeanServer.unregisterMBean(objectName);
             }
         }
     }

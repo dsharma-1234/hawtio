@@ -4,20 +4,25 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.security.Principal;
 import java.util.ArrayList;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.security.auth.Subject;
-
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import io.hawt.system.AuthHelpers;
 import io.hawt.system.AuthenticateResult;
 import io.hawt.system.Authenticator;
+import io.hawt.system.ConfigManager;
 import io.hawt.web.ServletHelpers;
-import org.jolokia.json.JSONObject;
+import org.jolokia.converter.Converters;
+import org.jolokia.converter.json.JsonConvertOptions;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,29 +33,54 @@ public class LoginServlet extends HttpServlet {
 
     private static final long serialVersionUID = 187076436862364207L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(LoginServlet.class);
+    private static final transient Logger LOG = LoggerFactory.getLogger(LoginServlet.class);
+    private static final int DEFAULT_SESSION_TIMEOUT = 1800; // 30 mins
 
-    protected int timeout;
-    protected AuthenticationConfiguration authConfiguration;
+    private Integer timeout = DEFAULT_SESSION_TIMEOUT;
+    private AuthenticationConfiguration authConfiguration;
+
+    private Converters converters = new Converters();
+    private JsonConvertOptions options = JsonConvertOptions.DEFAULT;
 
     private Redirector redirector = new Redirector();
 
     @Override
     public void init() {
         authConfiguration = AuthenticationConfiguration.getConfiguration(getServletContext());
-        timeout = AuthSessionHelpers.getSessionTimeout(getServletContext());
-        LOG.info("Hawtio login is using {} sec. HttpSession timeout", timeout);
+        setupSessionTimeout();
+        LOG.info("hawtio login is using {} HttpSession timeout", timeout != null ? timeout + " sec." : "default");
+    }
+
+    private void setupSessionTimeout() {
+        ConfigManager configManager = (ConfigManager) getServletContext().getAttribute(ConfigManager.CONFIG_MANAGER);
+        if (configManager == null) {
+            return;
+        }
+        String timeoutStr = configManager.get("sessionTimeout", Integer.toString(DEFAULT_SESSION_TIMEOUT));
+        if (timeoutStr == null) {
+            return;
+        }
+        try {
+            timeout = Integer.valueOf(timeoutStr);
+            // timeout of 0 means default timeout
+            if (timeout == 0) {
+                timeout = DEFAULT_SESSION_TIMEOUT;
+            }
+        } catch (Exception e) {
+            // ignore and use our own default of 1/2 hour
+            timeout = DEFAULT_SESSION_TIMEOUT;
+        }
     }
 
     /**
-     * GET simply redirects to login page.
+     * GET simply returns login.html
      */
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         if (authConfiguration.isKeycloakEnabled()) {
             redirector.doRedirect(request, response, "/");
         } else {
-            redirector.doRedirect(request, response, AuthenticationConfiguration.LOGIN_URL);
+            redirector.doForward(request, response, "/login.html");
         }
     }
 
@@ -59,32 +89,55 @@ public class LoginServlet extends HttpServlet {
      */
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        AuthSessionHelpers.clear(request, authConfiguration, true);
+        clearSession(request);
 
         JSONObject json = ServletHelpers.readObject(request.getReader());
         String username = (String) json.get("username");
         String password = (String) json.get("password");
 
-        AuthenticateResult result = new Authenticator(authConfiguration, username, password).authenticate(
+        AuthenticateResult result = Authenticator.authenticate(
+            authConfiguration, request, username, password,
             subject -> {
                 LOG.info("Logging in user: {}", AuthHelpers.getUsername(subject));
-                AuthSessionHelpers.setup(
-                    request.getSession(true), subject, username, timeout);
+                setupSession(request, subject, username);
                 sendResponse(response, subject);
             });
 
-        switch (result.getType()) {
-        case AUTHORIZED:
-            // response was sent using the authenticated subject, nothing more to do
-            break;
-        case NOT_AUTHORIZED:
-        case NO_CREDENTIALS:
-            ServletHelpers.doForbidden(response);
-            break;
-        case THROTTLED:
-            ServletHelpers.doTooManyRequests(response, result.getRetryAfter());
-            break;
+        switch (result) {
+            case AUTHORIZED:
+                // response was sent using the authenticated subject, nothing more to do
+                break;
+            case NOT_AUTHORIZED:
+            case NO_CREDENTIALS:
+                ServletHelpers.doForbidden(response);
+                break;
         }
+    }
+
+    private void clearSession(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return;
+        }
+        Subject subject = (Subject) session.getAttribute("subject");
+        if (subject != null) {
+            LOG.info("Logging out existing user: {}", AuthHelpers.getUsername(subject));
+            Authenticator.logout(authConfiguration, subject);
+            session.invalidate();
+        }
+    }
+
+    private void setupSession(HttpServletRequest request, Subject subject, String username) {
+        HttpSession session = request.getSession(true);
+        session.setAttribute("subject", subject);
+        session.setAttribute("user", username);
+        session.setAttribute("org.osgi.service.http.authentication.remote.user", username);
+        session.setAttribute("org.osgi.service.http.authentication.type", HttpServletRequest.BASIC_AUTH);
+        session.setAttribute("loginTime", GregorianCalendar.getInstance().getTimeInMillis());
+        if (timeout != null) {
+            session.setMaxInactiveInterval(timeout);
+        }
+        LOG.debug("Http session timeout for user {} is {} sec.", username, session.getMaxInactiveInterval());
     }
 
     private void sendResponse(HttpServletResponse response, Subject subject) {
@@ -111,7 +164,7 @@ public class LoginServlet extends HttpServlet {
             answer.put("principals", principals);
             answer.put("credentials", credentials);
 
-            ServletHelpers.writeObjectAsJson(out, answer);
+            ServletHelpers.writeObject(converters, options, out, answer);
         } catch (IOException e) {
             LOG.error("Failed to send response", e);
         }

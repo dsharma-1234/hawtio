@@ -1,28 +1,26 @@
 package io.hawt.web.filters;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.Objects;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.FilterConfig;
-import jakarta.servlet.ServletContext;
-import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
-import org.apache.commons.io.IOUtils;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 
 import static io.hawt.web.filters.BaseTagHrefFilter.PARAM_APPLICATION_CONTEXT_PATH;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.io.IOUtils;
+import org.junit.Before;
+import org.junit.Test;
 
 public class BaseTagHrefFilterTest {
 
@@ -34,7 +32,7 @@ public class BaseTagHrefFilterTest {
     private ServletOutputStream outputStream;
     private FilterChain filterChain;
 
-    @BeforeEach
+    @Before
     public void setUp() {
         filter = new BaseTagHrefFilter();
         filterConfig = mock(FilterConfig.class);
@@ -103,14 +101,12 @@ public class BaseTagHrefFilterTest {
     }
 
     private String readHtml() throws IOException {
-        return IOUtils.toString(
-            Objects.requireNonNull(BaseTagHrefFilterTest.class.getResourceAsStream("index.html")),
-            Charset.defaultCharset());
+        return IOUtils.toString(BaseTagHrefFilterTest.class.getResourceAsStream("index.html"));
     }
 
     private class MockFilterChain implements FilterChain {
         @Override
-        public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) throws IOException {
+        public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) throws IOException, ServletException {
             servletResponse.getOutputStream().write(readHtml().getBytes());
         }
     }

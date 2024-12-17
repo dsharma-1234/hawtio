@@ -1,8 +1,8 @@
 package io.hawt.example.spring.boot;
 
+import io.hawt.config.ConfigFacade;
+import io.hawt.springboot.HawtPlugin;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.actuate.web.exchanges.HttpExchangeRepository;
-import org.springframework.boot.actuate.web.exchanges.InMemoryHttpExchangeRepository;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
@@ -14,10 +14,21 @@ public class SampleSpringBootService {
     }
 
     /**
-     * Enable HTTP tracing for Spring Boot
+     * Loading an example plugin.
      */
     @Bean
-    public HttpExchangeRepository httpTraceRepository() {
-        return new InMemoryHttpExchangeRepository();
+    public HawtPlugin samplePlugin() {
+        return new HawtPlugin("sample-plugin",
+            "plugins",
+            "",
+            new String[] { "sample-plugin/js/sample-plugin.js" });
+    }
+
+    /**
+     * Set things up to be in offline mode.
+     */
+    @Bean
+    public ConfigFacade configFacade() {
+        return ConfigFacade.getSingleton();
     }
 }

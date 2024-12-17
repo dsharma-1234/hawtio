@@ -1,17 +1,16 @@
 package io.hawt.web.servlets;
 
+import org.jolokia.config.ConfigKey;
+import org.jolokia.http.AgentServlet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Properties;
-
-import jakarta.servlet.ServletConfig;
-import jakarta.servlet.ServletContext;
-import jakarta.servlet.ServletException;
-
-import org.jolokia.server.core.config.ConfigKey;
-import org.jolokia.server.core.http.AgentServlet;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Decorator class around Jolokia native AgentServlet.
@@ -22,16 +21,14 @@ import org.slf4j.LoggerFactory;
  * To specify them, you need to pass the to the jvm process with "jolokia." prefix.
  * <p>
  * Ex.
- * -Djolokia.policyLocation=file:///home/fuse/my-access.xml
+ * -Djolokia.policyLocation=file:///home/fuse/my-access.xml'
  * <p>
  * The supported input configuration is described in Jolokia documentation:
  * <p>
  * https://jolokia.org/reference/html/agents.html#agent-war-init-params
  */
 public class JolokiaConfiguredAgentServlet extends AgentServlet {
-    private static final Logger LOG = LoggerFactory.getLogger(JolokiaConfiguredAgentServlet.class);
-
-
+    private static final transient Logger LOG = LoggerFactory.getLogger(JolokiaConfiguredAgentServlet.class);
 
     @Override
     public void init(ServletConfig pServletConfig) throws ServletException {
@@ -63,7 +60,7 @@ public class JolokiaConfiguredAgentServlet extends AgentServlet {
 
     }
 
-    static class ServletConfigWrapper implements ServletConfig {
+    class ServletConfigWrapper implements ServletConfig {
         ServletConfig wrapped;
         Hashtable<String, String> ownProps;
 
@@ -91,7 +88,7 @@ public class JolokiaConfiguredAgentServlet extends AgentServlet {
         }
 
         @Override
-        public Enumeration<String> getInitParameterNames() {
+        public Enumeration getInitParameterNames() {
             return new TwoEnumerationsWrapper(ownProps.keys(), wrapped.getInitParameterNames());
         }
 
@@ -100,11 +97,11 @@ public class JolokiaConfiguredAgentServlet extends AgentServlet {
         }
     }
 
-    static class TwoEnumerationsWrapper implements Enumeration<String> {
+    class TwoEnumerationsWrapper implements Enumeration<String> {
         Enumeration<String> a;
         Enumeration<String> b;
 
-        public TwoEnumerationsWrapper(Enumeration<String> a, Enumeration<String> b) {
+        public TwoEnumerationsWrapper(Enumeration a, Enumeration b) {
             this.a = a;
             this.b = b;
         }

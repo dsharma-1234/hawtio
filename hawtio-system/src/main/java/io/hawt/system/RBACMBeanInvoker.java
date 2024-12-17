@@ -34,8 +34,9 @@ import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import javax.security.auth.Subject;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,17 +45,17 @@ import org.slf4j.LoggerFactory;
  */
 public class RBACMBeanInvoker {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RBACMBeanInvoker.class);
+    private static final transient Logger LOG = LoggerFactory.getLogger(RBACMBeanInvoker.class);
 
     /**
      * The length of time (in minutes) an entry in canInvokeCache is valid after creation
      */
-    private static final long CAN_INVOKE_CACHE_DURATION = 10;
+    private static long CAN_INVOKE_CACHE_DURATION = 10;
 
     /**
      * The length of time (in minutes) an entry in mbeanInfoCache is valid after creation
      */
-    private static final long MBEAN_INFO_CACHE_DURATION = 10;
+    private static long MBEAN_INFO_CACHE_DURATION = 10;
 
     protected MBeanServer mBeanServer;
     protected ObjectName securityMBean;
@@ -62,7 +63,7 @@ public class RBACMBeanInvoker {
     protected LoadingCache<CanInvokeKey, Boolean> canInvokeCache;
     protected LoadingCache<ObjectName, Map<String, MBeanAttributeInfo>> mbeanInfoCache;
 
-    protected static class CanInvokeKey {
+    protected class CanInvokeKey {
         protected String username;
         protected ObjectName objectName;
         protected String operation;
@@ -98,7 +99,10 @@ public class RBACMBeanInvoker {
         @Override
         public String toString() {
             return String.format("%s{username=%s, objectName=%s, operation=%s}",
-                getClass().getSimpleName(), username, objectName, operation);
+                getClass().getSimpleName(),
+                Objects.toString(username),
+                Objects.toString(objectName),
+                Objects.toString(operation));
         }
     }
 
@@ -130,17 +134,23 @@ public class RBACMBeanInvoker {
     }
 
     protected void initCaches() {
-        this.canInvokeCache = Caffeine.newBuilder()
+        this.canInvokeCache = CacheBuilder.newBuilder()
             .expireAfterWrite(CAN_INVOKE_CACHE_DURATION, TimeUnit.MINUTES)
-            .build(key -> {
-                LOG.debug("Do invoking canInvoke() for {}", key);
-                return doCanInvoke(key.objectName, key.operation);
+            .build(new CacheLoader<CanInvokeKey, Boolean>() {
+                @Override
+                public Boolean load(CanInvokeKey key) throws Exception {
+                    LOG.debug("Do invoking canInvoke() for {}", key);
+                    return doCanInvoke(key.objectName, key.operation);
+                }
             });
-        this.mbeanInfoCache = Caffeine.newBuilder()
+        this.mbeanInfoCache = CacheBuilder.newBuilder()
             .expireAfterWrite(MBEAN_INFO_CACHE_DURATION, TimeUnit.MINUTES)
-            .build(objectName -> {
-                LOG.debug("Do loading MBean attributes for {}", objectName);
-                return loadMBeanAttributes(objectName);
+            .build(new CacheLoader<ObjectName, Map<String, MBeanAttributeInfo>>() {
+                @Override
+                public Map<String, MBeanAttributeInfo> load(ObjectName objectName) throws Exception {
+                    LOG.debug("Do loading MBean attributes for {}", objectName);
+                    return loadMBeanAttributes(objectName);
+                }
             });
     }
 

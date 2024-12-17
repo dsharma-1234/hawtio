@@ -15,9 +15,10 @@ import org.slf4j.LoggerFactory;
  * Hawtio plugin registry
  */
 public class PluginRegistry extends JmxTreeWatcher implements PluginRegistryMBean {
-    private static final Logger LOG = LoggerFactory.getLogger(PluginRegistry.class);
 
-    private final AtomicLong updateCounter = new AtomicLong(0);
+    private static final transient Logger LOG = LoggerFactory.getLogger(PluginRegistry.class);
+
+    private AtomicLong updateCounter = new AtomicLong(0);
     private ObjectName comparator = null;
 
     public PluginRegistry() {
@@ -41,9 +42,12 @@ public class PluginRegistry extends JmxTreeWatcher implements PluginRegistryMBea
     }
 
     protected NotificationListener getNotificationListener() {
-        return (notification, handback) -> {
-            LOG.debug("Got notification: {} for object {}", notification, handback);
-            updateCounter.incrementAndGet();
+        return new NotificationListener() {
+            @Override
+            public void handleNotification(Notification notification, Object handback) {
+                LOG.debug("Got notification: " + notification + " for object " + handback);
+                updateCounter.incrementAndGet();
+            }
         };
     }
 

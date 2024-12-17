@@ -1,111 +1,33 @@
 ![hawtio][logo]
 
-[![Test](https://github.com/hawtio/hawtio/actions/workflows/test.yml/badge.svg?branch=4.x)](https://github.com/hawtio/hawtio/actions/workflows/test.yml)
-[![E2E Test](https://github.com/hawtio/hawtio/actions/workflows/e2e_test.yml/badge.svg?branch=4.x)](https://github.com/hawtio/hawtio/actions/workflows/e2e_test.yml)
+[![CircleCI](https://circleci.com/gh/hawtio/hawtio.svg?style=svg)](https://circleci.com/gh/hawtio/hawtio)
 
-## Introduction
+Don't cha wish your console was [hawt like me?](http://www.youtube.com/watch?v=YNSxNsr4wmA) I'm hawt so you can stay cool
 
-[Hawtio](https://hawt.io) is a lightweight and modular Web console for managing Java applications.
+**[hawtio](http://hawt.io)** is a lightweight and [modular](http://hawt.io/docs/plugins/) HTML5 web console with [lots of plugins](http://hawt.io/docs/plugins/) for managing your Java stuff
 
-![Hawtio screenshot](./docs/hawtio-console.png)
+[View Demos](http://hawt.io/docs/articles/)
+[Get Started Now!](http://hawt.io/docs/get-started/)
 
-Hawtio has [plugins](https://hawt.io/docs/plugins/) such as: Apache Camel and JMX (Logs, Spring Boot, Quartz, and more will be provided soon).
-You can dynamically extend Hawtio with [your own plugins](https://github.com/hawtio/hawtio-sample-plugin-ts) or automatically discover plugins inside the JVM.
+**hawtio** has [lots of plugins](http://hawt.io/docs/plugins/) such as: a git-based Dashboard and Wiki, [logs](http://hawt.io/plugins/logs/index.html), [health](http://hawt.io/plugins/health/index.html), JMX, OSGi, [Apache ActiveMQ](http://activemq.apache.org/), [Apache Camel](http://camel.apache.org/), [Apache OpenEJB](http://openejb.apache.org/), [Apache Tomcat](http://tomcat.apache.org/), [Jetty](http://www.eclipse.org/jetty/), [JBoss](http://www.jboss.org/jbossas) and [Fuse Fabric](http://fuse.fusesource.org/fabric/)
 
-The only server side dependency (other than the static HTML/CSS/JS/images) is the excellent [Jolokia library](http://jolokia.org) which has small footprint (around 300KB) and is available as a [JVM agent](http://jolokia.org/agent/jvm.html), or comes embedded as a servlet inside the `hawtio-default.war`.
+You can dynamically [extend hawtio with your own plugins](http://hawt.io/docs/plugins/) or automatically [discover plugins](http://hawt.io/docs/plugins/) inside the JVM.
 
-## Get Started
+The only server side dependency (other than the static HTML/CSS/JS/images) is the excellent [Jolokia library](http://jolokia.org) which has small footprint (around 300Kb) and is available as a [JVM agent](http://jolokia.org/agent/jvm.html), or comes embedded as a servlet inside the **hawtio-default.war** or can be deployed as [an OSGi bundle](http://jolokia.org/agent/osgi.html).
 
-- [Running from CLI](#running-from-cli-jbang)
-- [Running a Spring Boot app](#running-a-spring-boot-app)
-- [Running a Quarkus app](#running-a-quarkus-app)
-- [Deploying on OpenShift](https://github.com/hawtio/hawtio-online)
 
-For more details and other containers, see [Get Started Guide](https://hawt.io/docs/get-started.html).
+## Want to hack on some code?
 
-### Running from CLI (JBang)
+We love [contributions](http://hawt.io/docs/contributing/)!
 
-If you haven't installed [JBang](https://www.jbang.dev/) yet, first install it: <https://www.jbang.dev/download/>
+* [Articles and Demos](http://hawt.io/docs/articles/)
+* [FAQ](http://hawt.io/docs/faq/)
+* [Change Log](CHANGES.md)
+* [How to contribute](http://hawt.io/docs/contributing/)
+* [How to build the code](BUILDING.md)
+* [How to get started working on the code](DEVELOPERS.md)
+* [Community](http://hawt.io/community/)
 
-You can start up Hawtio on your machine using the following `jbang` command.
+Check out our [huboard](https://huboard.com/hawtio/hawtio#/) for prioritizing issues.
 
-```console
-jbang app install hawtio@hawtio/hawtio
-hawtio --help
-```
-
-### Running a Spring Boot app
-
-> [!NOTE]
-> Hawtio v4 supports Spring Boot 3.x.
-
-You can attach the Hawtio console to your Spring Boot app with the following steps.
-
-1. Add `io.hawt:hawtio-springboot` to the dependencies in `pom.xml`:
-
-   ```xml
-   <dependency>
-     <groupId>io.hawt</groupId>
-     <artifactId>hawtio-springboot</artifactId>
-     <version>4.2.0</version>
-   </dependency>
-   ```
-
-2. Enable the Hawtio and Jolokia endpoints by adding the following line in `application.properties`:
-
-   ```java
-   management.endpoints.web.exposure.include=hawtio,jolokia
-   spring.jmx.enabled=true
-   ```
-
-Now you should be able to run Hawtio in your Spring Boot app as follows:
-
-```console
-mvn spring-boot:run
-```
-
-Opening <http://localhost:8080/actuator/hawtio> should show the Hawtio console.
-
-See [Spring Boot example](https://github.com/hawtio/hawtio/tree/hawtio-4.2.0/examples/springboot) for a working example app.
-
-### Running a Quarkus app
-
-> [!NOTE]
-> Hawtio v4 supports Quarkus 3.x.
-
-You can attach the Hawtio console to your Quarkus app by adding `io.hawt:hawtio-quarkus` to the dependencies in `pom.xml`:
-
-```xml
-<dependency>
-  <groupId>io.hawt</groupId>
-  <artifactId>hawtio-quarkus</artifactId>
-  <version>4.2.0</version>
-</dependency>
-```
-
-Now you should be able to run Hawtio with your Quarkus app in development mode as follows:
-
-```console
-mvn compile quarkus:dev
-```
-
-Opening <http://localhost:8080/hawtio> should show the Hawtio console.
-
-See [Quarkus example](https://github.com/hawtio/hawtio/tree/hawtio-4.2.0/examples/quarkus) for a working example app.
-
-## Contributing
-
-We love [contributions](https://hawt.io/docs/contributing)!  Here are the resources on how to get you involved in Hawtio development.
-
-- [FAQ](https://hawt.io/docs/faq)
-- [Change Log](CHANGES.md)
-- [How to contribute](https://hawt.io/docs/contributing)
-- [Community](https://hawt.io/community/)
-
-Check out the [GitHub issues](https://github.com/hawtio/hawtio/issues) for finding issues to work on.
-
-## License
-
-Hawtio is licensed under [Apache License, Version 2.0](LICENSE.txt).
-
-[logo]: https://hawt.io/_/img/hawtio_logo.svg "hawtio"
+[logo]: http://hawt.io/images/hawtio_logo.svg "hawtio"
